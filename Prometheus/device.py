@@ -115,12 +115,12 @@ class HueLight(HueResource):
 
 
     class HueRoom(HueResource):
-    def __init__(self, dev_dict: Dict, hue_hostname: str, hue_key: str) -> None:
-        super().__init__(dev_dict, hue_hostname, hue_key)
+        def __init__(self, dev_dict: Dict, hue_hostname: str, hue_key: str) -> None:
+            super().__init__(dev_dict, hue_hostname, hue_key)
 
-    def _parse_dev_dict(self, dev_dict: Dict) -> None:
-        super()._parse_dev_dict(dev_dict)
-        self.childred = [child["rid"] for child in dev_dict['children']] 
+        def _parse_dev_dict(self, dev_dict: Dict) -> None:
+            super()._parse_dev_dict(dev_dict)
+            self.childred = [child["rid"] for child in dev_dict['children']] 
 
 
 class HueZone(HueResource):
