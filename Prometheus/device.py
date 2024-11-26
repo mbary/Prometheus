@@ -56,3 +56,57 @@ class HueResource:
         req = requests.put(url=url, headers=headers, data=json.dumps(body), verify=False)
 
 
+class HueLight(HueResource):
+    ## TODO
+    ## Implement light-specific functions such as on/off/brightness/colour etc.
+    def __init__(self, dev_dict: Dict, state: str) -> None:
+        super().__init__(dev_dict)
+
+    def _parse_dev_dict(self, dev_dict: Dict) -> None:
+        super()._parse_dev_dict(dev_dict)    
+        self.url = self.base_url + f"/light/{self.id}"
+        self.state = str(self._dev_data['on']['on'])
+        self.brightness_level = self._dev_data["dimming"]["brightness"]
+        self.colour_temperature = self._dev_data["color_temperature"]["mirek"]
+
+
+
+    ## TODO
+    ## Lack of set "natural" light is a bit of an issue
+    ## I have to check what time it is and trigger the adequate scene from 'natural light'
+    ## Then on the other hand maybe it shouldn't be placed in the HueLight class but rather in the
+    ## Room/Zone class? That way the HueLight class will be concise and limited to light-specific actions
+    ## Such as on/off, brightness and colour temp? 
+    ## Have to consider it and finally actually test dat shit
+    ## Gotta also make another repo specifically for this project and not keep it in the "playground" project
+    def turn_on(self) -> None:
+        if self.state != 'true':
+            body = {'on':{'on': True}}
+            super()._put(self.url, self._headers, body)
+            self.state = 'true'
+    
+    def turn_off(self) -> None:
+        if self.state != 'false':
+            body = {'on':{'on':False}}
+            super()._put(self.url, self._headers, body)
+            self.state = 'false'
+
+    def change_brightness(self, b_level: int) -> None:
+        if b_level > 100:
+            level = 100
+        elif b_level < 0:
+            level = 0
+        else:
+            level = b_level
+        body = {"dimming":{"brightness":level}}
+        super()._put(self.url, self._headers, body)
+
+    def change_temp(self, t_level: int) -> None:
+        if t_level>500:
+            level=500
+        elif t_level<153:
+            level=153
+        else:
+            level = t_level
+        body = {"color_temperature":{"mirek":level}}
+        super()._put(self.url, self._headers, body)
