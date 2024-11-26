@@ -110,3 +110,33 @@ class HueLight(HueResource):
             level = t_level
         body = {"color_temperature":{"mirek":level}}
         super()._put(self.url, self._headers, body)
+
+
+
+
+    class HueRoom(HueResource):
+    def __init__(self, dev_dict: Dict, hue_hostname: str, hue_key: str) -> None:
+        super().__init__(dev_dict, hue_hostname, hue_key)
+
+    def _parse_dev_dict(self, dev_dict: Dict) -> None:
+        super()._parse_dev_dict(dev_dict)
+        self.childred = [child["rid"] for child in dev_dict['children']] 
+
+
+class HueZone(HueResource):
+    def __init__(self, dev_dict: Dict, hue_hostname: str, hue_key: str) -> None:
+        super().__init__(dev_dict, hue_hostname, hue_key)
+
+    def _parse_dev_dict(self, dev_dict: Dict) -> None:
+        super()._parse_dev_dict(dev_dict)
+        self.childred = [child["rid"] for child in dev_dict['children']] 
+
+
+class HueScene(HueResource):
+    def __init__(self, dev_dict: Dict, hue_hostname: str, hue_key: str) -> None:
+        super().__init__(dev_dict, hue_hostname, hue_key)
+
+    def _parse_dev_dict(self, dev_dict: Dict) -> None:
+        super()._parse_dev_dict(dev_dict)
+
+        self.tg_area = dev_dict[""]
