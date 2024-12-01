@@ -39,8 +39,8 @@ class HueResource:
         self._services = {adict["rtype"]:adict["rid"] for adict in self._dev_data["services"]}
         self.id = dev_dict['id']
 
-    def _build_headers(self):
-        headers = {
+    def _build_headers(self): ## TODO this should be changed to _build_body or something similar
+        headers = {           ##      because headers are common for all queries (thus in Bridgette class) while body will be unique to each request thus it should be on device level not manager level
             'hue-application-key':self._hue_key,
             'Content-Type':'application/json'
         }
