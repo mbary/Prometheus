@@ -12,18 +12,6 @@ warnings.filterwarnings('ignore')
 
 from .device import HueLight,HueZone,HueScene,HueRoom
 
-# with open('cfg.yaml', 'r') as file:
-#     cfg = yaml.load(file, Loader=yaml.Loader)
-
-# HOSTNAME = cfg["hostname"]
-# HUE_KEY = cfg["key"]
-# BASE_URL = f'https://{HOSTNAME}'
-
-# HEADERS = {
-#         'hue-application-key':HUE_KEY
-#     ,   'Content-Type':'application/json'
-# }
-
 
 
 class Bridgette:
