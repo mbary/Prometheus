@@ -46,7 +46,7 @@ class Bridgette:
                                                               hue_key=self.__HUE_KEY) for dev_dict in raw_lights["data"]}
         return all_lights
 
-    def _get_zones(self) -> List[Dict]:
+    def _get_zones(self) -> List[Dict[str, HueZone]]:
         """ Fetches all zones connected to te Bridge details"""
         res = requests.get(url=self.__BASE_URL+"zone",
                            headers=self._HEADERS,
