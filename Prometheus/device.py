@@ -7,7 +7,9 @@ Alongside major devices such as:
 import json
 import requests
 from typing import Dict
-
+from pprint import pprint
+import warnings
+warnings.filterwarnings('ignore')
 
 class HueResource:
     ## TODO
@@ -50,11 +52,13 @@ class HueLight(HueResource):
         # super().__init__(dev_dict, hue_hostname, hue_key)
 
     def _parse_dev_dict(self, dev_dict: Dict) -> None:
-        super()._parse_dev_dict(dev_dict)    
+        super()._parse_dev_dict(dev_dict) 
         self.url = self.base_url + f"/light/{self.id}"
         self.state = str(self._dev_data['on']['on'])
-        self.brightness_level = self._dev_data["dimming"]["brightness"]
-        self.colour_temperature = self._dev_data["color_temperature"]["mirek"]
+        # Smart plugs are categorised as lights, unfortunately
+        if dev_dict['metadata']['archetype']!='plug':
+            self.brightness_level = self._dev_data["dimming"]["brightness"]
+            self.colour_temperature = self._dev_data["color_temperature"]["mirek"]
 
 
 
@@ -99,7 +103,6 @@ class HueLight(HueResource):
         super()._put(self.url, self._HEADERS, body, verify=False)
 
 
-
 class HueRoom(HueResource):
         def __init__(self, dev_dict: Dict, hue_hostname: str, hue_key: str) -> None:
             super().__init__(dev_dict, hue_hostname, hue_key)
@@ -127,7 +130,6 @@ class HueRoom(HueResource):
         def turn_off(self) -> None:
             if self.state != 'false':
                 body = {'on':{'on':False}}
-                print(self.grouped_light_url)
                 super()._put(url=self.grouped_light_url, headers=self._HEADERS, body=body)
                 self.state = 'false'
 
@@ -183,7 +185,6 @@ class HueZone(HueResource):
                 level = b_level
             body = {'dimming':{'brightness':level}}
             super()._put(url=self.grouped_light_url, headers=self._HEADERS, body=body) 
-
 
 
 
