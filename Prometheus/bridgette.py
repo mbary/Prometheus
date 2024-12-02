@@ -82,3 +82,8 @@ class Bridgette:
                                                           hue_hostname=self.__HUE_HOSTNAME,
                                                           hue_key=self.__HUE_KEY) for dev_dict in raw_rooms["data"]}
         return all_rooms
+    
+    def turn_all_devices_off(self) -> None:
+        """Func for turning off all devices linked to the bridge"""
+        for room in self.rooms.values():
+            room.turn_off()
