@@ -111,6 +111,7 @@ class HueRoom(HueResource):
             super().__init__(dev_dict, hue_hostname, hue_key)
             self.state = self._get_state()
 
+
         def _parse_dev_dict(self, dev_dict: Dict) -> None:
             super()._parse_dev_dict(dev_dict)
             self.children = [child["rid"] for child in dev_dict['children']]
@@ -159,14 +160,45 @@ class HueRoom(HueResource):
         
 
 class HueZone(HueResource):
-    # def __init__(self, dev_dict: Dict, hue_hostname: str, hue_key: str) -> None:
-    #     super().__init__(dev_dict, hue_hostname, hue_key)
+    def __init__(self, dev_dict: Dict, hue_hostname: str, hue_key: str) -> None:
+        super().__init__(dev_dict, hue_hostname, hue_key)
+        self.state = self._get_state()
 
     def _parse_dev_dict(self, dev_dict: Dict) -> None:
         super()._parse_dev_dict(dev_dict)
         self.children = [child["rid"] for child in dev_dict['children']]
-        self.grouped_light_id = dev_dict["services"]["rid"]
+        self.grouped_light_id = dev_dict["services"][0]["rid"]
+        self.url = self.base_url + f"/zone/{self.id}"
+        self.grouped_light_id = dev_dict["services"][0]["rid"]
+        self.grouped_light_url = self.base_url + f"/grouped_light/{self.grouped_light_id}"
 
+    def _get_state(self) -> str:
+        req = super()._get(self.grouped_light_url)
+        data = req['data'][0]
+        return str(data["on"]["on"])
+
+    def turn_on(self) -> None:
+        if self.state != 'true':
+            body = {'on':{'on':True}}
+            super()._put(self.grouped_light_url, self._HEADERS, body)
+            self.state = 'true'
+
+    def turn_off(self) -> None:
+        if self.state != 'false':
+            body = {'on':{'on':False}}
+            super()._put(self.grouped_light_url, self._HEADERS, body)
+            self.state = 'false'
+
+
+    def change_brightness(self, b_level: int) -> None:
+            if b_level>100:
+                level=100
+            elif b_level < 0:
+                level=0
+            else:
+                level = b_level
+            body = {'dimming':{'brightness':level}}
+            super()._put(url=self.grouped_light_url, headers=self._HEADERS, body=body) 
 
 class HueScene(HueResource):
     # def __init__(self, dev_dict: Dict, hue_hostname: str, hue_key: str) -> None:
