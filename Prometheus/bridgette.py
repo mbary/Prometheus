@@ -71,6 +71,15 @@ class Bridgette:
                                                           hue_key=self.__HUE_KEY) for dev_dict in raw_rooms["data"]}
         return all_rooms
     
+    def _get_scenes(self) -> List[Dict]:
+
+        res = requests.get(url=self.__BASE_URL+"scene",
+                           headers=self._HEADERS,
+                           verify=False)
+        raw_scenes = json.loads(res.text)
+
+        return raw_scenes['data']
+    
     def turn_all_devices_off(self) -> None:
         """Func for turning off all devices linked to the bridge"""
         for room in self.rooms.values():
