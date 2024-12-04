@@ -4,6 +4,8 @@ Alongside major devices such as:
 
 """
 
+## TODO Add stuff like __repr__, __str__ etc to create a pretty representatoin of the devices
+
 import json
 import requests
 from typing import Dict
@@ -34,6 +36,7 @@ class HueResource:
         self._dev_data = dev_dict
         self.name = self._dev_data["metadata"]["name"]
         self.id = dev_dict['id']
+        self.dev_type = dev_dict['metadata']['archetype']
 
     def _get(self, url: str) -> Dict:
         """Retrievies Device(s) info"""
@@ -144,7 +147,19 @@ class HueRoom(HueResource):
             body = {'dimming':{'brightness':level}}
             super()._put(url=self.grouped_light_url, headers=self._HEADERS, body=body)
 
-
+        def set_scene(self, scene_name: str, brightness: int=None) -> None:
+            if not brightness:
+                body = {'recall':{'action':'active'}}
+            else:
+                if brightness > 100:
+                    brightness=100
+                elif brightness<1:
+                    brightness=1
+                body = {'recall':{'action':'active',
+                                  'dimming':{'brightness':brightness}}}
+            
+            scene_url = self.base_url + f"scene/{self.scenes[scene_name.lower()]['id']}"
+            super()._put(url=scene_url, headers=self._HEADERS, body=body)
 
 class HueZone(HueResource):
     def __init__(self, dev_dict: Dict, hue_hostname: str, hue_key: str) -> None:
@@ -177,7 +192,6 @@ class HueZone(HueResource):
             super()._put(self.grouped_light_url, self._HEADERS, body)
             self.state = 'false'
 
-
     def change_brightness(self, b_level: int) -> None:
             if b_level>100:
                 level=100
@@ -187,6 +201,20 @@ class HueZone(HueResource):
                 level = b_level
             body = {'dimming':{'brightness':level}}
             super()._put(url=self.grouped_light_url, headers=self._HEADERS, body=body) 
+
+    def set_scene(self, scene_name: str, brightness: int=None) -> None:
+            if not brightness:
+                body = {'recall':{'action':'active'}}
+            else:
+                if brightness > 100:
+                    brightness=100
+                elif brightness<1:
+                    brightness=1
+                body = {'recall':{'action':'active',
+                                  'dimming':{'brightness':brightness}}}
+            
+            scene_url = self.base_url + f"scene/{self.scenes[scene_name.lower()]['id']}"
+            super()._put(url=scene_url, headers=self._HEADERS, body=body)
 
 
 
