@@ -46,7 +46,7 @@ class Bridgette:
         
         raw_lights = json.loads(res.text)
         
-        all_lights = {dev_dict["metadata"]["name"]:HueLight(dev_dict=dev_dict,
+        all_lights = {dev_dict["metadata"]["name"].lower():HueLight(dev_dict=dev_dict,
                                                               hue_hostname=self.__HUE_HOSTNAME,
                                                               hue_key=self.__HUE_KEY) for dev_dict in raw_lights["data"]}
         return all_lights
@@ -58,7 +58,7 @@ class Bridgette:
                            verify=False)
         raw_zones = json.loads(res.text)
 
-        all_zones = {dev_dict['metadata']['name']:HueZone(dev_dict=dev_dict,
+        all_zones = {dev_dict['metadata']['name'].lower():HueZone(dev_dict=dev_dict,
                                                           hue_hostname=self.__HUE_HOSTNAME,
                                                           hue_key=self.__HUE_KEY) for dev_dict in raw_zones['data']}
         return all_zones
@@ -71,7 +71,7 @@ class Bridgette:
                            verify=False)
         raw_rooms = json.loads(res.text)
 
-        all_rooms = {dev_dict["metadata"]["name"]:HueRoom(dev_dict=dev_dict,
+        all_rooms = {dev_dict["metadata"]["name"].lower():HueRoom(dev_dict=dev_dict,
                                                           hue_hostname=self.__HUE_HOSTNAME,
                                                           hue_key=self.__HUE_KEY) for dev_dict in raw_rooms["data"]}
         return all_rooms
@@ -84,18 +84,28 @@ class Bridgette:
                            headers=self._HEADERS, 
                            verify=False)
         raw_scenes = json.loads(res.text)
+        raw_smart_scenes = self._get_smart_scenes()
+        all_raw_scenes = raw_scenes['data'] + raw_smart_scenes
+        return all_raw_scenes
+    
+    def _get_smart_scenes(self) -> List[Dict]:
+        res = requests.get(url=self.__BASE_URL+"smart_scene",
+                           headers=self._HEADERS,
+                           verify=False)
+        raw_smart_scenes = json.loads(res.text)
 
-        return raw_scenes['data']
+        return raw_smart_scenes['data']
 
     def _assign_scenes(self) -> None:
 
         all_scenes = self._get_scenes()
+        smart_scenes = self._get_smart_scenes()
         for scene_dict in all_scenes:
             scene_id = scene_dict['group']['rid']
             if scene_id in self._ROOM_MAP.keys():
-                self.rooms[self._ROOM_MAP[scene_id]].scenes[scene_dict['metadata']['name']] = scene_dict
+                self.rooms[self._ROOM_MAP[scene_id]].scenes[scene_dict['metadata']['name'].lower()] = scene_dict
             elif scene_id in self._ZONE_MAP.keys():
-                self.zones[self._ZONE_MAP[scene_id]].scenes[scene_dict['metadata']['name']] = scene_dict
+                self.zones[self._ZONE_MAP[scene_id]].scenes[scene_dict['metadata']['name'].lower()] = scene_dict
     
     def turn_all_devices_off(self) -> None:
         """Func for turning off all devices linked to the bridge"""
