@@ -5,7 +5,7 @@ Alongside major devices such as:
 """
 
 ## TODO Add stuff like __repr__, __str__ etc to create a pretty representatoin of the devices
-
+from datetime import datetime
 import json
 import requests
 from typing import Dict
@@ -34,7 +34,7 @@ class HueResource:
     def _parse_dev_dict(self, dev_dict: Dict) -> None:
         """Parses device data and creates general, device agnostic, attributes"""
         self._dev_data = dev_dict
-        self.name = self._dev_data["metadata"]["name"]
+        self.name = self._dev_data["metadata"]["name"].lower()
         self.id = dev_dict['id']
         self.dev_type = dev_dict['metadata']['archetype']
 
@@ -127,9 +127,13 @@ class HueRoom(HueResource):
 
         def turn_on(self) -> None:
             if self.state != 'true':
-                body = {'on':{'on':True}}
-                super()._put(url=self.grouped_light_url, headers=self._HEADERS, body=body)
-                self.state = 'true'
+                if self.name == 'office' or self.name == 'bedroom':
+                    self.set_scene(scene_name='natural light')
+                    self.state = 'true'
+                else:
+                    body = {'on':{'on':True}}
+                    super()._put(url=self.grouped_light_url, headers=self._HEADERS, body=body)
+                    self.state = 'true'
 
         def turn_off(self) -> None:
             if self.state != 'false':
@@ -161,6 +165,7 @@ class HueRoom(HueResource):
             scene_url = self.base_url + f"scene/{self.scenes[scene_name.lower()]['id']}"
             super()._put(url=scene_url, headers=self._HEADERS, body=body)
 
+
 class HueZone(HueResource):
     def __init__(self, dev_dict: Dict, hue_hostname: str, hue_key: str) -> None:
         super().__init__(dev_dict, hue_hostname, hue_key)
@@ -179,12 +184,16 @@ class HueZone(HueResource):
         req = super()._get(self.grouped_light_url)
         data = req['data'][0]
         return str(data["on"]["on"])
-
+    
     def turn_on(self) -> None:
         if self.state != 'true':
-            body = {'on':{'on':True}}
-            super()._put(self.grouped_light_url, self._HEADERS, body)
-            self.state = 'true'
+            if self.name == 'office' or self.name == 'bedroom':
+                self.set_scene(scene_name='natural light')
+                self.state = 'true'
+            else:
+                body = {'on':{'on':True}}
+                super()._put(url=self.grouped_light_url, headers=self._HEADERS, body=body)
+                self.state = 'true'
 
     def turn_off(self) -> None:
         if self.state != 'false':
