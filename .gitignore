@@ -1,7 +1,7 @@
 # User specific
 *.json
 *.yml
-*.yaml
+cfg.yaml
 *.mp3
 
 # Byte-compiled / optimized / DLL files
