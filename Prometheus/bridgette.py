@@ -17,6 +17,56 @@ from .device import HueLight,HueZone,HueRoom
 ## And all devices connected to id :)
 
 class Bridgette:
+    """Bridgette class for controlling Philips Hue bridge and connected devices.
+    A class that provides interface for controlling Philips Hue bridge and its connected devices
+    like lights, rooms and zones. It handles authentication, device discovery and scene management.
+    Parameters
+    ----------
+    cfg_path : Path, optional
+        Path to YAML configuration file containing bridge hostname and key (default is './cfg.yaml')
+    Attributes
+    ----------
+    lights : dict
+        Dictionary of all lights connected to the bridge, with light names as keys
+    rooms : dict
+        Dictionary of all rooms configured on the bridge, with room names as keys
+    zones : dict
+        Dictionary of all zones configured on the bridge, with zone names as keys
+    _ROOM_MAP : dict
+        Internal mapping of room IDs to room names
+    _ZONE_MAP : dict
+        Internal mapping of zone IDs to zone names
+    __HUE_HOSTNAME : str
+        Hostname of the Hue bridge
+    __HUE_KEY : str
+        Authentication key for the Hue bridge
+    __BASE_URL : str
+        Base URL for the Hue bridge API
+    _HEADERS : dict
+        HTTP headers used for API requests
+    Methods
+    -------
+    _get_lights()
+        Fetches all lights connected to the bridge
+    _get_zones()
+        Fetches all zones configured on the bridge
+    _get_rooms()
+        Fetches all rooms configured on the bridge
+    _get_scenes()
+        Fetches all scenes configured on the bridge
+    _get_smart_scenes()
+        Fetches all smart scenes configured on the bridge
+    _assign_scenes()
+        Assigns scenes to their respective rooms and zones
+    turn_all_devices_off()
+        Turns off all devices connected to the bridge
+    turn_all_lights_on()
+        Turns on all lights (excluding plugs) connected to the bridge
+    Notes
+    -----
+    The class requires a YAML configuration file containing 'hostname' and 'key' fields
+    for the Hue bridge authentication.
+    """
     def  __init__(self, cfg_path:Path=Path('./cfg.yaml'),) -> None:
         with open(cfg_path, 'r') as file:
             self.cfg = yaml.load(file, Loader=yaml.Loader)
@@ -79,7 +129,7 @@ class Bridgette:
     ## TODO consider moving this to devices (zones/rooms) and pull respective scenes instead of 
     ## doing so in the 'controller' class
     def _get_scenes(self) -> List[Dict]:
-
+        """ Fethes all scenes connected to the Bridge"""
         res = requests.get(url=self.__BASE_URL+"scene",
                            headers=self._HEADERS, 
                            verify=False)
@@ -89,6 +139,7 @@ class Bridgette:
         return all_raw_scenes
     
     def _get_smart_scenes(self) -> List[Dict]:
+        """ Fetches all smart scenes (e.g. Natural Light) connected to the Bridge"""
         res = requests.get(url=self.__BASE_URL+"smart_scene",
                            headers=self._HEADERS,
                            verify=False)
@@ -97,7 +148,7 @@ class Bridgette:
         return raw_smart_scenes['data']
 
     def _assign_scenes(self) -> None:
-
+        """ Assigns scenes to respective rooms and zones"""
         all_scenes = self._get_scenes()
         smart_scenes = self._get_smart_scenes()
         for scene_dict in all_scenes:

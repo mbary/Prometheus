@@ -14,6 +14,53 @@ import warnings
 warnings.filterwarnings('ignore')
 
 class HueResource:
+    """Base class representing a Philips Hue resource.
+
+    This class serves as a foundation for all Hue ecosystem devices and resources.
+    It provides common attributes and methods shared across different Hue devices.
+
+    Parameters
+    ----------
+    dev_dict : Dict
+        Dictionary containing device information and configuration
+    hue_hostname : str
+        Hostname/IP address of the Hue bridge
+    hue_key : str
+        Authentication key for the Hue bridge API
+
+    Attributes
+    ----------
+    name : str
+        Name of the device (lowercase)
+    id : str
+        Unique identifier of the device
+    dev_type : str
+        Device archetype/type
+    base_url : str
+        Base URL for API requests
+    _dev_data : Dict
+        Raw device data dictionary
+    _hue_hostname : str
+        Stored Hue bridge hostname
+    _hue_key : str
+        Stored Hue bridge authentication key
+    _HEADERS : Dict
+        HTTP headers used for API requests
+
+    Methods
+    -------
+    _parse_dev_dict(dev_dict)
+        Parses device dictionary to set common attributes
+    _get(url)
+        Makes GET request to retrieve device information
+    _put(url, headers, body)
+        Makes PUT request to modify device state
+
+    Notes
+    -----
+    This is a base class meant to be inherited by specific device type classes
+    like lights, switches, zones, rooms etc.
+    """
     ## TODO
     ## This is meant to be a Hue resource base class.
     ## It should have all attributes/capabilites shared across the HUE ecosystem
@@ -49,10 +96,43 @@ class HueResource:
 
 
 class HueLight(HueResource):
-    ## TODO
-    ## Implement light-specific functions such as on/off/brightness/colour etc.
-    # def __init__(self, dev_dict: Dict, hue_hostname: str, hue_key: str) -> None:
-        # super().__init__(dev_dict, hue_hostname, hue_key)
+    """A class representing a Philips Hue light device.
+    This class extends HueResource to provide specific functionality for Hue lights,
+    including controlling power state, brightness, and color temperature. It handles both
+    regular lights and smart plugs (which are categorized as lights in the Hue system).
+    Parameters
+    ----------
+    dev_dict : Dict
+        Dictionary containing the device information from the Hue Bridge
+    hue_hostname : str
+        Hostname or IP address of the Hue Bridge
+    hue_key : str
+        Authentication key for the Hue Bridge API
+    Attributes
+    ----------
+    url : str
+        The complete API URL for this specific light
+    state : str
+        Current power state of the light ('true' or 'false')
+    brightness_level : float
+        Current brightness level (0-100), only for actual lights
+    colour_temperature : int
+        Current color temperature in mirek (153-500), only for actual lights
+    Methods
+    -------
+    turn_on()
+        Turns the light on if it's not already on
+    turn_off()
+        Turns the light off if it's not already off
+    change_brightness(b_level: int)
+        Changes the brightness level (0-100)
+    change_temp(t_level: int)
+        Changes the color temperature (153-500 mirek)
+    Notes
+    -----
+    Smart plugs are handled differently from regular lights - they only support on/off
+    functionality and don't have brightness or color temperature attributes.
+    """
 
     def _parse_dev_dict(self, dev_dict: Dict) -> None:
         super()._parse_dev_dict(dev_dict) 
@@ -63,16 +143,6 @@ class HueLight(HueResource):
             self.brightness_level = self._dev_data["dimming"]["brightness"]
             self.colour_temperature = self._dev_data["color_temperature"]["mirek"]
 
-
-
-    ## TODO
-    ## Lack of set "natural" light is a bit of an issue
-    ## I have to check what time it is and trigger the adequate scene from 'natural light'
-    ## Then on the other hand maybe it shouldn't be placed in the HueLight class but rather in the
-    ## Room/Zone class? That way the HueLight class will be concise and limited to light-specific actions
-    ## Such as on/off, brightness and colour temp? 
-    ## Have to consider it and finally actually test dat shit
-    ## Gotta also make another repo specifically for this project and not keep it in the "playground" project
     def turn_on(self) -> None:
         if self.state != 'true':
             body = {'on':{'on': True}}
@@ -107,6 +177,46 @@ class HueLight(HueResource):
 
 
 class HueRoom(HueResource):
+        """A class representing a Philips Hue room with its associated controls and states.
+        This class inherits from HueResource and provides functionality to control Philips Hue
+        rooms, including turning lights on/off, changing brightness, and setting scenes.
+        Parameters
+        ----------
+        dev_dict : Dict
+            Dictionary containing the room device information from Hue Bridge
+        hue_hostname : str
+            Hostname or IP address of the Hue Bridge
+        hue_key : str
+            Authentication key for the Hue Bridge API
+        Attributes
+        ----------
+        state : str
+            Current state of the room ('true' for on, 'false' for off)
+        scenes : dict
+            Dictionary of available scenes for the room
+        children : list
+            List of child device IDs in the room
+        url : str
+            API endpoint URL for this room
+        grouped_light_id : str
+            ID for controlling all lights in the room as a group
+        grouped_light_url : str
+            API endpoint URL for controlling grouped lights
+        Methods
+        -------
+        turn_on()
+            Turns on all lights in the room. For office and bedroom, sets 'natural light' scene
+        turn_off()
+            Turns off all lights in the room
+        change_brightness(b_level: int)
+            Changes brightness level of all lights in the room
+        set_scene(scene_name: str, brightness: int=None)
+            Activates a specific scene in the room with optional brightness setting
+        Notes
+        -----
+        The brightness levels are always normalized between 0 and 100.
+        Scene names are case-insensitive.
+        """
         def __init__(self, dev_dict: Dict, hue_hostname: str, hue_key: str) -> None:
             super().__init__(dev_dict, hue_hostname, hue_key)
             self.state = self._get_state()
@@ -167,6 +277,48 @@ class HueRoom(HueResource):
 
 
 class HueZone(HueResource):
+    """A class representing a Philips Hue Zone.
+    This class provides functionality to control a group of Philips Hue lights that are organized
+    into a zone. It allows for basic operations like turning the lights on/off, changing brightness,
+    and setting scenes.
+    Parameters
+    ----------
+    dev_dict : Dict
+        Dictionary containing device information from the Hue Bridge
+    hue_hostname : str
+        Hostname or IP address of the Hue Bridge
+    hue_key : str
+        Authentication key for the Hue Bridge API
+    Attributes
+    ----------
+    state : str
+        Current state of the zone ('true' for on, 'false' for off)
+    scenes : dict
+        Dictionary of available scenes for this zone
+    children : list
+        List of child device IDs in this zone
+    grouped_light_id : str
+        ID of the grouped light service
+    url : str
+        API endpoint URL for this zone
+    grouped_light_url : str
+        API endpoint URL for the grouped light service
+    Methods
+    -------
+    turn_on()
+        Turns on all lights in the zone. For office and bedroom zones, 
+        sets the 'natural light' scene
+    turn_off()
+        Turns off all lights in the zone
+    change_brightness(b_level: int)
+        Changes the brightness level of the zone
+    set_scene(scene_name: str, brightness: int = None)
+        Activates a specific scene in the zone with optional brightness level
+    Notes
+    -----
+    This class inherits from HueResource and implements specific functionality
+    for controlling Philips Hue zones through the Hue Bridge API v2.
+    """
     def __init__(self, dev_dict: Dict, hue_hostname: str, hue_key: str) -> None:
         super().__init__(dev_dict, hue_hostname, hue_key)
         self.state = self._get_state()
