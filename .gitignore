@@ -1,6 +1,6 @@
 # User specific
 *.json
-*.yml
+# *.yml
 cfg.yaml
 *.mp3
 
