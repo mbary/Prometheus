@@ -224,15 +224,3 @@ class HueZone(HueResource):
             
             scene_url = self.base_url + f"scene/{self.scenes[scene_name.lower()]['id']}"
             super()._put(url=scene_url, headers=self._HEADERS, body=body)
-
-
-
-class HueScene(HueResource):
-    # def __init__(self, dev_dict: Dict, hue_hostname: str, hue_key: str) -> None:
-    #     super().__init__(dev_dict, hue_hostname, hue_key)
-
-    def _parse_dev_dict(self, dev_dict: Dict) -> None:
-        super()._parse_dev_dict(dev_dict)
-        self.children = [child['rid'] for child in dev_dict['children']]
-        self.grouped_light_id = dev_dict["services"]["rid"]
-        self.tg_area = dev_dict[""]

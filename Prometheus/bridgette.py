@@ -10,7 +10,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
-from .device import HueLight,HueZone,HueScene,HueRoom
+from .device import HueLight,HueZone,HueRoom
 
 
 ## TODO Add stuff like __repr__, __str__ etc to create a pretty representation of the bridge
