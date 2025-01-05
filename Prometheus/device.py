@@ -8,7 +8,8 @@ Alongside major devices such as:
 from datetime import datetime
 import json
 import requests
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
+from dataclasses import dataclass
 from pprint import pprint
 import warnings
 warnings.filterwarnings('ignore')
@@ -136,6 +137,18 @@ class HueResource:
         except ValueError as e:
             raise HueResponseError(f"Failed to parse response from Hue Bridge: {str(e)}")
         
+
+@dataclass
+class LightState:
+    """ Represents the state of a Hue Light """
+
+    is_on: bool
+    brightness: Optional[int] = None
+    colour_temp: Optional[int] = None
+    reachable: bool = True
+    last_updated: datetime = datetime.now()
+
+
 class HueLight(HueResource):
     """A class representing a Philips Hue light device.
     This class extends HueResource to provide specific functionality for Hue lights,
@@ -175,44 +188,81 @@ class HueLight(HueResource):
     functionality and don't have brightness or color temperature attributes.
     """
 
+    MIN_BRIGHTNESS = 0
+    MAX_BRIGHTNESS = 100
+    MIN_COLOR_TEMP = 153  # Warmest - 2000K
+    MAX_COLOR_TEMP = 500  # Coolest - 6500K
+
+    def __init__(
+        self, 
+        dev_dict: Dict, 
+        hue_hostname: str, 
+        hue_key: str ) -> None:
+        super().__init__(dev_dict, hue_hostname, hue_key)
+        self._current_state = self._initialise_state()
+
+
     def _parse_dev_dict(self, dev_dict: Dict) -> None:
-        super()._parse_dev_dict(dev_dict) 
-        self.url = self.base_url + f"/light/{self.id}"
-        self.state = str(self._dev_data['on']['on'])
-        # Smart plugs are categorised as lights, unfortunately
-        if dev_dict['metadata']['archetype']!='plug':
-            self.brightness_level = self._dev_data["dimming"]["brightness"]
-            self.colour_temperature = self._dev_data["color_temperature"]["mirek"]
+        try:
+            super()._parse_dev_dict(dev_dict) 
+            self.url = self.base_url + f"/light/{self.id}"
+            self.state = str(self._dev_data['on']['on'])
+            self._is_plug = dev_dict['metadata']['archetype']=='plug'
+            print(self._is_plug)
+            # Smart plugs are categorised as lights, unfortunately
+            if not self._is_plug:
+                if 'dimming' not in self._dev_data.keys() or 'color_temperature' not in self._dev_data.keys():
+                    raise HueValidationError("Invalid light device data")
+                
+                self.brightness_level = self._dev_data["dimming"]["brightness"]
+                self.colour_temperature = self._dev_data["color_temperature"]["mirek"]
+        except KeyError as e:
+            raise HueValidationError(f"Invalid light device data: {str(e)}")
+        
+    def _initialise_state(self) -> LightState:
+
+        try:
+            response = self._get(self.url)
+            data = response['data'][0]
+
+            return LightState(
+                is_on = data['on']['on'],
+                brightness = data['dimming']['brightness'] if not self._is_plug else None,
+                colour_temp = data['color_temperature']['mirek'] if not self._is_plug else None,
+                reachable = True,
+                last_updated=datetime.now()
+            )
+        
+        except Exception as e:
+            raise e
 
     def turn_on(self) -> None:
         if self.state != 'true':
             body = {'on':{'on': True}}
             super()._put(self.url, self._HEADERS, body, verify=False)
             self.state = 'true'
+            self._current_state.is_on = True
+            self._current_state.last_updated = datetime.now()
     
     def turn_off(self) -> None:
         if self.state != 'false':
             body = {'on':{'on':False}}
             super()._put(self.url, self._HEADERS, body, verify=False)
             self.state = 'false'
+            self._current_state.is_on = False
+            self._current_state.last_updated = datetime.now()
 
     def change_brightness(self, b_level: int) -> None:
-        if b_level > 100:
-            level = 100
-        elif b_level < 0:
-            level = 0
-        else:
-            level = b_level
+
+        level = max(self.MIN_BRIGHTNESS, min(b_level, self.MAX_BRIGHTNESS))
         body = {"dimming":{"brightness":level}}
         super()._put(self.url, self._HEADERS, body, verify=False)
+        self._current_state.brightness=level
+        self._current_state.last_updated = datetime.now()
 
     def change_temp(self, t_level: int) -> None:
-        if t_level>500:
-            level=500
-        elif t_level<153:
-            level=153
-        else:
-            level = t_level
+
+        level = max(self.MIN_COLOR_TEMP, min(t_level, self.MAX_COLOR_TEMP))
         body = {"color_temperature":{"mirek":level}}
         super()._put(self.url, self._HEADERS, body, verify=False)
 
