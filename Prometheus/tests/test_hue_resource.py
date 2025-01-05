@@ -2,7 +2,7 @@ import pytest
 import requests
 from unittest.mock import Mock, patch
 from ..device import HueResource
-from ..exceptions import HueConnectionError, HueValidationError
+from ..exceptions import HueConnectionError, HueValidationError, HueResponseError
 
 @pytest.fixture
 def valid_dev_dict():
@@ -26,17 +26,17 @@ def mock_session():
 class TestHueResource:
 
     def test_initialisation_with_valid_data(self, valid_dev_dict, mock_session):
-        hue_resource = HueResource(dev_dict=valid_dev_dict, hue_hostname="test", hue_key="test", session=mock_session)
+        hue_resource = HueResource(dev_dict=valid_dev_dict, hue_hostname="test", hue_key="test", http_client=mock_session)
         assert hue_resource.id == "123"
-        assert hue_resource.name == "Test Device"
-        assert hue_resource.archetype == "light"
-        assert hue_resource.state == "on"
+        assert hue_resource.name == "test device"
+        assert hue_resource.dev_type == "light"
+
 
     def test_initialisation_with_invalid_data(self, valid_dev_dict, mock_session):
         invalid_dev_dict = {"metadata":{}}
 
         with pytest.raises(HueValidationError) as e:
-            HueResource(dev_dict=invalid_dev_dict, hue_hostname="bridge.local", hue_key="invalid_key", session=mock_session)
+            HueResource(dev_dict=invalid_dev_dict, hue_hostname="bridge.local", hue_key="invalid_key", http_client=mock_session)
             assert 'missing required fields' in str(e.value)
 
 
@@ -109,7 +109,7 @@ class TestHueResource:
         
         with pytest.raises(HueValidationError) as exc_info:
             resource._put("https://test.url", headers={}, body={})
-        assert "cannot be empty" in str(exc_info.value)
+        assert "requires a body" in str(exc_info.value)
 
     def test_put_bridge_error(self, valid_dev_dict, mock_session):
         """Test PUT where bridge returns an error"""
@@ -133,7 +133,7 @@ class TestHueResource:
                 headers={"Content-Type": "application/json"},
                 body={"on": {"on": True}}
             )
-        assert "Bridge reported error" in str(exc_info.value)
+        assert "Failed to update device state" in str(exc_info.value)
 
     def test_put_network_error(self, valid_dev_dict, mock_session):
         """Test PUT with network failure"""
