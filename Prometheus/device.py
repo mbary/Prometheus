@@ -8,10 +8,12 @@ Alongside major devices such as:
 from datetime import datetime
 import json
 import requests
-from typing import Dict
+from typing import Dict, Optional
 from pprint import pprint
 import warnings
 warnings.filterwarnings('ignore')
+
+from .exceptions import HueConnectionError, HueResponseError, HueValidationError
 
 class HueResource:
     """Base class representing a Philips Hue resource.
@@ -71,12 +73,26 @@ class HueResource:
 
     ## based on this, using inheritence, we can create subclasses such as lights, switches, zones, rooms etc.
     ## They will be extended by device-specific functionalities such as on/off and whatever the fuck else I manage to find
-    def __init__(self, dev_dict:Dict, hue_hostname: str, hue_key: str) -> None:
+    def __init__(self, 
+                 dev_dict:Dict, 
+                 hue_hostname: str, 
+                 hue_key: str,
+                 http_client: Optional[requests.Session] = None) -> None:
+        
+        # Check Resource Input is valid
+        if not all(field in dev_dict for field in ['id','metadata']):
+            raise HueValidationError(f"Invalid Resource. Missing required fields: 'id' or 'metadata'")
+        
+        self._http_client = http_client or requests.Session()
         self._hue_hostname = hue_hostname 
         self._hue_key = hue_key
         self.base_url = f"https://{self._hue_hostname}/clip/v2/resource/"  
+        self._HEADERS = {
+            "hue-application-key":self._hue_key,
+              "Content-Type":"application/json"
+              }
+        
         self._parse_dev_dict(dev_dict=dev_dict)
-        self._HEADERS = {"hue-application-key":self._hue_key, "Content-Type":"application/json"}
 
     def _parse_dev_dict(self, dev_dict: Dict) -> None:
         """Parses device data and creates general, device agnostic, attributes"""
@@ -87,14 +103,39 @@ class HueResource:
 
     def _get(self, url: str) -> Dict:
         """Retrievies Device(s) info"""
-        req = requests.get(url=url, headers=self._HEADERS, verify=False)
-        return json.loads(req.text)
+        try:
+            response = self._http_client.get(url=url, headers=self._HEADERS, verify=False)
+            response.raise_for_status()
+            return response.json()
+        # req = requests.get(url=url, headers=self._HEADERS, verify=False)
+        # return json.loads(req.text)
+        except requests.exceptions.RequestException as e:
+            raise HueConnectionError(f"Failed to connect to Hue Bridge: {str(e)}")
+        except ValueError as e:
+            raise HueResponseError(f"Failed to parse response from Hue Bridge: {str(e)}")
 
     def _put(self, url: str, headers: Dict, body: Dict) -> None:
         """Modifies Device State"""
-        req = requests.put(url=url, headers=headers, data=json.dumps(body), verify=False)
+        if not body:
+            raise HueValidationError("PUT request requires a body")
+        try:
+            json_data = json.dumps(body)
+            response = self._http_client.put(url=url, headers=headers, data=json_data, verify=False)
+            response.raise_for_status()
 
+            if response.text:
+                if 'errors' in response.json():
+                    raise HueResponseError(f"Failed to update device state: {response.json()['errors']}")
+                
+        # req = requests.put(url=url, headers=headers, data=json.dumps(body), verify=False)
 
+        except json.JSONDecodeError as e:
+            raise HueResponseError(f"Invalid request body: {str(e)}")
+        except requests.exceptions.RequestException as e:
+            raise HueConnectionError(f"Failed to connect to Hue Bridge: {str(e)}")
+        except ValueError as e:
+            raise HueResponseError(f"Failed to parse response from Hue Bridge: {str(e)}")
+        
 class HueLight(HueResource):
     """A class representing a Philips Hue light device.
     This class extends HueResource to provide specific functionality for Hue lights,
