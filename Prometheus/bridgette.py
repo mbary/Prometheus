@@ -63,6 +63,18 @@ class Bridgette:
         Turns off all devices connected to the bridge
     turn_all_lights_on()
         Turns on all lights (excluding plugs) connected to the bridge
+    Raises
+    ------
+    BridgeConfigError
+        If configuration file is not found or is invalid
+    BridgeConnectionError
+        If unable to connect to or fetch data from the bridge
+    BridgeResponseError
+        If bridge response is invalid or no devices/scenes found
+    BridgeError
+        For general bridge-related errors
+    yaml.YAMLError
+        If YAML configuration file is malformed
     Notes
     -----
     The class requires a YAML configuration file containing 'hostname' and 'key' fields
@@ -107,9 +119,13 @@ class Bridgette:
             raise BridgeError(f"Error initialising Hue Bridge: {e}")
         
     def _get_lights(self) -> List[Dict[str, HueLight]]:
-        """ Fetches all lights' connected to te Bridge details"""
-
-
+        """ Fetches all lights' connected to te Bridge details
+        Returns:
+            List[Dict[str, HueLight]]: Dictionary where key is light name (lowercase) and value is HueLight object
+        Raises:
+            BridgeResponseError: If no lights are found or response format is invalid
+            BridgeConnectionError: If there is an error connecting to or getting data from the bridge
+        """
         try:
             res = requests.get(url=self.__BASE_URL+"light", 
                             headers=self._HEADERS,
@@ -133,7 +149,16 @@ class Bridgette:
             raise BridgeConnectionError(f"Error fetching lights: {e}")
         
     def _get_zones(self) -> List[Dict[str, HueZone]]:
-        """ Fetches all zones connected to te Bridge details"""
+        """Retrieves all zones from the Hue Bridge.
+        This method queries the Hue Bridge API for all available zones and creates
+        HueZone objects for each zone found.
+        Returns:
+            List[Dict[str, HueZone]]: A dictionary mapping zone names (lowercase) to HueZone objects
+        Raises:
+            BridgeResponseError: If no zones are found or the Bridge response is invalid
+            BridgeConnectionError: If there's an error connecting to or communicating with the Bridge
+        """
+
         try:
             res = requests.get(url=self.__BASE_URL+"zone",
                             headers=self._HEADERS,
@@ -154,8 +179,14 @@ class Bridgette:
             raise BridgeConnectionError(f"Error fetching zones: {e}")
         
     def _get_rooms(self) -> List[Dict[str,HueRoom]]:
-        """ Fetches all rooms connected to te Bridge details"""
-        
+        """
+        Retrieves all rooms configured on the Philips Hue Bridge.
+        Returns:
+            List[Dict[str,HueRoom]]: Dictionary mapping room names (lowercase) to HueRoom objects
+        Raises:
+            BridgeResponseError: If no rooms are found or bridge returns invalid response
+            BridgeConnectionError: If there is an error connecting to or communicating with the bridge
+        """
         try:
             res = requests.get(url=self.__BASE_URL+'room',
                             headers=self._HEADERS,
@@ -178,7 +209,14 @@ class Bridgette:
     ## TODO consider moving this to devices (zones/rooms) and pull respective scenes instead of 
     ## doing so in the 'controller' class
     def _get_scenes(self) -> List[Dict]:
-        """ Fethes all scenes connected to the Bridge"""
+        """
+        Retrieves all scenes (both regular and smart scenes) from the Hue Bridge.
+        Returns:
+            List[Dict]: A list of dictionaries containing scene information.
+        Raises:
+            BridgeResponseError: If no scenes are found or if the bridge response is invalid.
+            BridgeConnectionError: If there is an error connecting to or fetching data from the bridge.
+        """
         try:
             res = requests.get(url=self.__BASE_URL+"scene",
                             headers=self._HEADERS, 
@@ -197,7 +235,14 @@ class Bridgette:
             raise BridgeConnectionError(f"Error fetching scenes: {e}")
 
     def _get_smart_scenes(self) -> List[Dict]:
-        """ Fetches all smart scenes (e.g. Natural Light) connected to the Bridge"""
+        """
+        Retrieves smart scenes from the Philips Hue Bridge.
+        Returns:
+            List[Dict]: A list of dictionaries containing smart scene data from the bridge
+        Raises:
+            BridgeResponseError: If the bridge response is invalid or no smart scenes are found
+            BridgeConnectionError: If there is an error connecting to or fetching data from the bridge
+        """
         try:
             res = requests.get(url=self.__BASE_URL+"smart_scene",
                             headers=self._HEADERS,
@@ -215,7 +260,19 @@ class Bridgette:
 
 
     def _assign_scenes(self) -> None:
-        """ Assigns scenes to respective rooms and zones"""
+        """
+        Assigns scenes to their corresponding rooms and zones.
+
+        This method processes all scenes retrieved from the bridge and assigns them to the appropriate
+        room or zone objects based on the scene's group ID (rid). The scenes are stored in the scenes 
+        dictionary of each room/zone object, with the scene name (converted to lowercase) as the key.
+
+        The method uses _ROOM_MAP and _ZONE_MAP to determine where each scene belongs. If a scene's
+        group ID matches an entry in either map, the scene is assigned to the corresponding room or zone.
+
+        Returns:
+            None
+        """
         all_scenes = self._get_scenes()
         for scene_dict in all_scenes:
             scene_id = scene_dict['group']['rid']
@@ -225,7 +282,6 @@ class Bridgette:
                 self.zones[self._ZONE_MAP[scene_id]].scenes[scene_dict['metadata']['name'].lower()] = scene_dict
     
     def turn_all_devices_off(self) -> None:
-        """Func for turning off all devices linked to the bridge"""
         for room in self.rooms.values():
             room.turn_off()
 
