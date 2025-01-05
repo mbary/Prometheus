@@ -11,6 +11,7 @@ warnings.filterwarnings('ignore')
 
 
 from .device import HueLight,HueZone,HueRoom
+from .exceptions import BridgeConfigError,BridgeConnectionError,BridgeResponseError, BridgeError
 
 
 ## TODO Add stuff like __repr__, __str__ etc to create a pretty representation of the bridge
@@ -68,89 +69,154 @@ class Bridgette:
     for the Hue bridge authentication.
     """
     def  __init__(self, cfg_path:Path=Path('./cfg.yaml'),) -> None:
-        with open(cfg_path, 'r') as file:
-            self.cfg = yaml.load(file, Loader=yaml.Loader)
 
-        self.__HUE_HOSTNAME = self.cfg['hostname']
-        self.__HUE_KEY = self.cfg["key"]
-        self.__BASE_URL = f'https://{self.__HUE_HOSTNAME}/clip/v2/resource/'
-        self._HEADERS = {
-                    'hue-application-key':self.__HUE_KEY
-                ,   'Content-Type':'application/json'
-        }
-        self.lights = self._get_lights()
-        self.rooms = self._get_rooms()
-        self.zones = self._get_zones()
+        try:
+            
+            ##TODO I will have to change this so no cfg file is required
+            if not cfg_path.exists():
+                raise BridgeConfigError(f"Configuration file not found at {cfg_path}")
+            
+            with open(cfg_path, 'r') as file:
+                self.cfg = yaml.load(file, Loader=yaml.Loader)
+
+            if 'hostname' not in self.cfg.keys() or 'key' not in self.cfg.keys():
+                raise BridgeConfigError("Configuration file must contain 'hostname' and 'key' fields")
+            
+            self.__HUE_HOSTNAME = self.cfg['hostname']
+            self.__HUE_KEY = self.cfg["key"]
+            self.__BASE_URL = f'https://{self.__HUE_HOSTNAME}/clip/v2/resource/'
+            self._HEADERS = {
+                        'hue-application-key':self.__HUE_KEY
+                    ,   'Content-Type':'application/json'
+            }
+            # Initialise all devices
+            try:
+                self.lights = self._get_lights()
+                self.rooms = self._get_rooms()
+                self.zones = self._get_zones()
+                
+                self._ROOM_MAP = {room.id:name for name,room in self.rooms.items()}
+                self._ZONE_MAP = {zone.id:name for name,zone in self.zones.items()}
+                self._assign_scenes()
+            except Exception as e:
+                raise BridgeConnectionError(f"Error connecting to bridge: {e}")
         
-        self._ROOM_MAP = {room.id:name for name,room in self.rooms.items()}
-        self._ZONE_MAP = {zone.id:name for name,zone in self.zones.items()}
-        self._assign_scenes()
-
-
+        except yaml.YAMLError as e:
+            raise BridgeConfigError(f"Error parsing configuration file: {e}")
+        except Exception as e:
+            raise BridgeError(f"Error initialising Hue Bridge: {e}")
+        
     def _get_lights(self) -> List[Dict[str, HueLight]]:
         """ Fetches all lights' connected to te Bridge details"""
 
-        res = requests.get(url=self.__BASE_URL+"light", 
-                           headers=self._HEADERS,
-                           verify=False)
-        
-        raw_lights = json.loads(res.text)
-        
-        all_lights = {dev_dict["metadata"]["name"].lower():HueLight(dev_dict=dev_dict,
-                                                              hue_hostname=self.__HUE_HOSTNAME,
-                                                              hue_key=self.__HUE_KEY) for dev_dict in raw_lights["data"]}
-        return all_lights
 
+        try:
+            res = requests.get(url=self.__BASE_URL+"light", 
+                            headers=self._HEADERS,
+                            verify=False)
+            
+            if 'data' not in res.text:
+                raise BridgeResponseError(f"Error fetching lights: {res.text}")
+            
+            raw_lights = json.loads(res.text)
+            
+            all_lights = {dev_dict["metadata"]["name"].lower():HueLight(dev_dict=dev_dict,
+                                                                hue_hostname=self.__HUE_HOSTNAME,
+                                                                hue_key=self.__HUE_KEY) for dev_dict in raw_lights["data"]}
+            
+            if not all_lights:
+                raise BridgeResponseError("No lights found on the bridge")
+            
+            return all_lights
+
+        except Exception as e:
+            raise BridgeConnectionError(f"Error fetching lights: {e}")
+        
     def _get_zones(self) -> List[Dict[str, HueZone]]:
         """ Fetches all zones connected to te Bridge details"""
-        res = requests.get(url=self.__BASE_URL+"zone",
-                           headers=self._HEADERS,
-                           verify=False)
-        raw_zones = json.loads(res.text)
+        try:
+            res = requests.get(url=self.__BASE_URL+"zone",
+                            headers=self._HEADERS,
+                            verify=False)
+            
+            if 'data' not in res.text:
+                raise BridgeResponseError(f"Error fetching zones: {res.text}")
+            raw_zones = json.loads(res.text)
 
-        all_zones = {dev_dict['metadata']['name'].lower():HueZone(dev_dict=dev_dict,
-                                                          hue_hostname=self.__HUE_HOSTNAME,
-                                                          hue_key=self.__HUE_KEY) for dev_dict in raw_zones['data']}
-        return all_zones
-    
+            all_zones = {dev_dict['metadata']['name'].lower():HueZone(dev_dict=dev_dict,
+                                                            hue_hostname=self.__HUE_HOSTNAME,
+                                                            hue_key=self.__HUE_KEY) for dev_dict in raw_zones['data']}
+            if not all_zones:
+                raise BridgeResponseError("No zones found on the bridge")
+            
+            return all_zones
+        except Exception as e:
+            raise BridgeConnectionError(f"Error fetching zones: {e}")
+        
     def _get_rooms(self) -> List[Dict[str,HueRoom]]:
         """ Fetches all rooms connected to te Bridge details"""
         
-        res = requests.get(url=self.__BASE_URL+'room',
-                           headers=self._HEADERS,
-                           verify=False)
-        raw_rooms = json.loads(res.text)
+        try:
+            res = requests.get(url=self.__BASE_URL+'room',
+                            headers=self._HEADERS,
+                            verify=False)
+        
+            if 'data' not in res.text:
+                raise BridgeResponseError(f"Error fetching rooms: {res.text}")
+            raw_rooms = json.loads(res.text)
 
-        all_rooms = {dev_dict["metadata"]["name"].lower():HueRoom(dev_dict=dev_dict,
-                                                          hue_hostname=self.__HUE_HOSTNAME,
-                                                          hue_key=self.__HUE_KEY) for dev_dict in raw_rooms["data"]}
-        return all_rooms
-    
+            all_rooms = {dev_dict["metadata"]["name"].lower():HueRoom(dev_dict=dev_dict,
+                                                            hue_hostname=self.__HUE_HOSTNAME,
+                                                            hue_key=self.__HUE_KEY) for dev_dict in raw_rooms["data"]}
+            
+            if not all_rooms:
+                raise BridgeResponseError("No rooms found on the bridge")
+            return all_rooms
+        except Exception as e:
+            raise BridgeConnectionError(f"Error fetching rooms: {e}")
+
     ## TODO consider moving this to devices (zones/rooms) and pull respective scenes instead of 
     ## doing so in the 'controller' class
     def _get_scenes(self) -> List[Dict]:
         """ Fethes all scenes connected to the Bridge"""
-        res = requests.get(url=self.__BASE_URL+"scene",
-                           headers=self._HEADERS, 
-                           verify=False)
-        raw_scenes = json.loads(res.text)
-        raw_smart_scenes = self._get_smart_scenes()
-        all_raw_scenes = raw_scenes['data'] + raw_smart_scenes
-        return all_raw_scenes
-    
+        try:
+            res = requests.get(url=self.__BASE_URL+"scene",
+                            headers=self._HEADERS, 
+                            verify=False)
+            if 'data' not in res.text:
+                raise BridgeResponseError(f"Error fetching scenes: {res.text}")
+            raw_scenes = json.loads(res.text)
+            raw_smart_scenes = self._get_smart_scenes()
+            all_raw_scenes = raw_scenes['data'] + raw_smart_scenes
+
+            if not all_raw_scenes:
+                raise BridgeResponseError("No scenes found on the bridge")
+            
+            return all_raw_scenes
+        except Exception as e:
+            raise BridgeConnectionError(f"Error fetching scenes: {e}")
+
     def _get_smart_scenes(self) -> List[Dict]:
         """ Fetches all smart scenes (e.g. Natural Light) connected to the Bridge"""
-        res = requests.get(url=self.__BASE_URL+"smart_scene",
-                           headers=self._HEADERS,
-                           verify=False)
-        raw_smart_scenes = json.loads(res.text)
+        try:
+            res = requests.get(url=self.__BASE_URL+"smart_scene",
+                            headers=self._HEADERS,
+                            verify=False)
+            if 'data' not in res.text:
+                raise BridgeResponseError(f"Error fetching smart scenes: {res.text}")
+            raw_smart_scenes = json.loads(res.text)
 
-        return raw_smart_scenes['data']
+            if not raw_smart_scenes:
+                raise BridgeResponseError("No smart scenes found on the bridge")
+            
+            return raw_smart_scenes['data']
+        except Exception as e:
+            raise BridgeConnectionError(f"Error fetching smart scenes: {e}")
+
 
     def _assign_scenes(self) -> None:
         """ Assigns scenes to respective rooms and zones"""
         all_scenes = self._get_scenes()
-        smart_scenes = self._get_smart_scenes()
         for scene_dict in all_scenes:
             scene_id = scene_dict['group']['rid']
             if scene_id in self._ROOM_MAP.keys():
