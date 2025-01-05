@@ -125,7 +125,8 @@ class HueResource:
             response.raise_for_status()
 
             if response.text:
-                if 'errors' in response.json():
+                # if 'errors' in response.json():
+                if len(response.json()['errors']):
                     raise HueResponseError(f"Failed to update device state: {response.json()['errors']}")
                 
         # req = requests.put(url=url, headers=headers, data=json.dumps(body), verify=False)
@@ -133,7 +134,7 @@ class HueResource:
         except json.JSONDecodeError as e:
             raise HueResponseError(f"Invalid request body: {str(e)}")
         except requests.exceptions.RequestException as e:
-            raise HueConnectionError(f"Failed to connect to Hue Bridge: {str(e)}")
+            raise HueConnectionError(f"Failed to connect to Hue Bridge: {e}")
         except ValueError as e:
             raise HueResponseError(f"Failed to parse response from Hue Bridge: {str(e)}")
         
@@ -208,7 +209,6 @@ class HueLight(HueResource):
             self.url = self.base_url + f"/light/{self.id}"
             self.state = str(self._dev_data['on']['on'])
             self._is_plug = dev_dict['metadata']['archetype']=='plug'
-            print(self._is_plug)
             # Smart plugs are categorised as lights, unfortunately
             if not self._is_plug:
                 if 'dimming' not in self._dev_data.keys() or 'color_temperature' not in self._dev_data.keys():
@@ -314,57 +314,129 @@ class HueRoom(HueResource):
             self.scenes = {}
 
         def _parse_dev_dict(self, dev_dict: Dict) -> None:
-            super()._parse_dev_dict(dev_dict)
-            self.children = [child["rid"] for child in dev_dict['children']]
-            self.url = self.base_url + f"/room/{self.id}"
-            # ID allowing to controll all devices the room
-            self.grouped_light_id = dev_dict["services"][0]["rid"]
-            self.grouped_light_url = self.base_url + f"/grouped_light/{self.grouped_light_id}"
 
+            try:
+                super()._parse_dev_dict(dev_dict)
+
+                if 'children' not in dev_dict:
+                    raise HueValidationError(f"{self.name} room appears to be empty.\nAdd devices for full experience") 
+
+                self.children = [child["rid"] for child in dev_dict['children']]
+                self.url = self.base_url + f"/room/{self.id}"
+
+                # ID allowing to controll all devices the room
+                if not dev_dict["services"][0]["rid"]:
+                    raise HueValidationError(f"Missing grouped light ID for {self.name} room")
+                self.grouped_light_id = dev_dict["services"][0]["rid"]
+                self.grouped_light_url = self.base_url + f"/grouped_light/{self.grouped_light_id}"
+
+            except KeyError as e:
+                raise HueValidationError(f"Invalid room data: {str(e)}")
+            except Exception as e:
+                raise HueValidationError(f"Failed to parse room data: {str(e)}")
+                
         def _get_state(self) -> str:
-            req = super()._get(url=self.grouped_light_url)
-            data = req["data"][0]
-            return str(data["on"]["on"])
+            try:
+                response = super()._get(self.grouped_light_url)
+
+                if not response["data"]:
+                    raise HueResponseError(f"Failed to retrieve state for {self.name} room")
+                data = response["data"][0]
+
+                if 'on' not in data:
+                    raise HueResponseError(f"Failed to retrieve state for {self.name} room")
+                
+                return str(data["on"]["on"])
+            
+            except HueResponseError:
+                raise
+            except Exception as e:
+                raise HueConnectionError(f"Failed to retrieve state for {self.name} room: {str(e)}")
 
         def turn_on(self) -> None:
             if self.state != 'true':
-                if self.name == 'office' or self.name == 'bedroom':
-                    self.set_scene(scene_name='natural light')
-                    self.state = 'true'
-                else:
-                    body = {'on':{'on':True}}
-                    super()._put(url=self.grouped_light_url, headers=self._HEADERS, body=body)
-                    self.state = 'true'
-
+                try:
+                    if self.name == 'office' or self.name == 'bedroom':
+                        self.set_smart_scene(scene_name='natural light')
+                        self.state = 'true'
+                    else:
+                        body = {'on':{'on':True}}
+                        super()._put(url=self.grouped_light_url, headers=self._HEADERS, body=body)
+                        self.state = 'true'
+                except Exception as e:
+                    raise HueConnectionError(f"Failed to turn on {self.name} room: {str(e)}")
+                
         def turn_off(self) -> None:
             if self.state != 'false':
-                body = {'on':{'on':False}}
-                super()._put(url=self.grouped_light_url, headers=self._HEADERS, body=body)
-                self.state = 'false'
-
+                try:
+                    body = {'on':{'on':False}}
+                    super()._put(url=self.grouped_light_url, headers=self._HEADERS, body=body)
+                    self.state = 'false'
+                except Exception as e:
+                    raise HueConnectionError(f"Failed to turn off {self.name} room: {str(e)}")
+                
         def change_brightness(self, b_level: int) -> None:
-            if b_level>100:
-                level=100
-            elif b_level < 0:
-                level=0
-            else:
-                level = b_level
-            body = {'dimming':{'brightness':level}}
-            super()._put(url=self.grouped_light_url, headers=self._HEADERS, body=body)
-
-        def set_scene(self, scene_name: str, brightness: int=None) -> None:
-            if not brightness:
-                body = {'recall':{'action':'active'}}
-            else:
-                if brightness > 100:
-                    brightness=100
-                elif brightness<1:
-                    brightness=1
-                body = {'recall':{'action':'active',
-                                  'dimming':{'brightness':brightness}}}
             
-            scene_url = self.base_url + f"scene/{self.scenes[scene_name.lower()]['id']}"
-            super()._put(url=scene_url, headers=self._HEADERS, body=body)
+            try:
+                if not isinstance(b_level, (int, float)):
+                        raise HueValidationError("Brightness level must be a number")   
+                
+                normalised_brightness = max(1, min(b_level, 100))
+                
+                body = {'dimming':{'brightness':normalised_brightness}}
+                super()._put(url=self.grouped_light_url, headers=self._HEADERS, body=body)
+
+            except HueValidationError:
+                raise
+            except Exception as e:
+                raise HueConnectionError(f"Failed to change brightness in {self.name} room: {str(e)}")
+            
+        def set_scene(self, scene_name: str, brightness: int=None) -> None:
+            try:
+                scene_name = scene_name.lower()
+                if scene_name not in self.scenes:
+                    raise HueValidationError(f"Scene '{scene_name}' not found in {self.name} room")
+                
+                if not brightness:
+                    body = {'recall':{'action':'active'}}
+                else:
+                    if not isinstance(brightness, (int, float)):
+                        raise HueValidationError("Brightness level must be a number")   
+                    normalised_brightness = max(1, min(brightness, 100))
+                    body = {'recall':{'action':'active',
+                                    'dimming':{'brightness':normalised_brightness}}}
+
+                
+                scene_url = self.base_url + f"scene/{self.scenes[scene_name]['id']}"
+                super()._put(url=scene_url, headers=self._HEADERS, body=body)
+            except HueValidationError:
+                raise
+            except Exception as e:
+                raise HueConnectionError(f"Failed to set scene: {scene_name} in {self.name} room: {str(e)}")
+
+        def set_smart_scene(self, scene_name: str, brightness: int=None) -> None:
+            try:
+                scene_name = scene_name.lower()
+                if scene_name not in self.scenes:
+                    raise HueValidationError(f"Scene '{scene_name}' not found in {self.name} room")
+                
+                if not brightness:
+                    body = {'recall':{'action':'activate'}}
+                else:
+                    if not isinstance(brightness, (int, float)):
+                        raise HueValidationError("Brightness level must be a number")   
+                    normalised_brightness = max(1, min(brightness, 100))
+                    body = {'recall':{'action':'activate',
+                                    'dimming':{'brightness':normalised_brightness}}}
+                
+                scene_url = self.base_url + f"smart_scene/{self.scenes[scene_name.lower()]['id']}"
+                super()._put(url=scene_url, headers=self._HEADERS, body=body)
+        
+            except HueValidationError:
+                raise
+            except Exception as e:
+                raise HueConnectionError(f"Failed to set smart scene: {scene_name} in {self.name} room: {str(e)}")
+        
 
 
 class HueZone(HueResource):
@@ -431,7 +503,7 @@ class HueZone(HueResource):
     def turn_on(self) -> None:
         if self.state != 'true':
             if self.name == 'office' or self.name == 'bedroom':
-                self.set_scene(scene_name='natural light')
+                self.set_smart_scene(scene_name='natural light')
                 self.state = 'true'
             else:
                 body = {'on':{'on':True}}
@@ -467,3 +539,18 @@ class HueZone(HueResource):
             
             scene_url = self.base_url + f"scene/{self.scenes[scene_name.lower()]['id']}"
             super()._put(url=scene_url, headers=self._HEADERS, body=body)
+
+    def set_smart_scene(self, scene_name: str, brightness: int=None) -> None:
+        if not brightness:
+            body = {'recall':{'action':'activate'}}
+        else:
+            if brightness > 100:
+                brightness=100
+            elif brightness<1:
+                brightness=1
+            body = {'recall':{'action':'activate',
+                              'dimming':{'brightness':brightness}}}
+        
+        scene_url = self.base_url + f"smart_scene/{self.scenes[scene_name.lower()]['id']}"
+        super()._put(url=scene_url, headers=self._HEADERS, body=body)
+    
