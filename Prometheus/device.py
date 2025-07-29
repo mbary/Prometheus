@@ -346,7 +346,7 @@ class HueLight(HueResource):
         if self.state != 'true': ##TODO This shit has to be changed. it's bloody annoying. if I remove it, then I can over-ride current state regardless of whatit is
                                  ##     Meaning e.g. if A scene is active but I want to set it to e.g. natural light in bedroom/office then I can just say "turn on office" instead of "set smart_scene in office"
             body = {'on':{'on': True}}
-            super()._put(self.url, self._HEADERS, body, verify=False)
+            super()._put(self.url, self._HEADERS, body)
             self.state = 'true'
             self._current_state.is_on = True
             self._current_state.last_updated = datetime.now()
@@ -363,7 +363,7 @@ class HueLight(HueResource):
         """
         if self.state != 'false':
             body = {'on':{'on':False}}
-            super()._put(self.url, self._HEADERS, body, verify=False)
+            super()._put(self.url, self._HEADERS, body)
             self.state = 'false'
             self._current_state.is_on = False
             self._current_state.last_updated = datetime.now()
@@ -385,7 +385,7 @@ class HueLight(HueResource):
 
         level = max(self.MIN_BRIGHTNESS, min(b_level, self.MAX_BRIGHTNESS))
         body = {"dimming":{"brightness":level}}
-        super()._put(self.url, self._HEADERS, body, verify=False)
+        super()._put(self.url, self._HEADERS, body)
         self._current_state.brightness=level
         self._current_state.last_updated = datetime.now()
 
@@ -409,7 +409,7 @@ class HueLight(HueResource):
 
         level = max(self.MIN_COLOR_TEMP, min(t_level, self.MAX_COLOR_TEMP))
         body = {"color_temperature":{"mirek":level}}
-        super()._put(self.url, self._HEADERS, body, verify=False)
+        super()._put(self.url, self._HEADERS, body)
 
 
 class HueRoom(HueResource):
@@ -432,6 +432,8 @@ class HueRoom(HueResource):
             Dictionary of available scenes for the room
         children : list
             List of child device IDs in the room
+        child_devices : dict  
+            Dictionary mapping light names to HueLight objects for devices in this room
         url : str
             API endpoint URL for this room
         grouped_light_id : str
@@ -478,6 +480,7 @@ class HueRoom(HueResource):
             super().__init__(dev_dict, hue_hostname, hue_key)
             self.state = self._get_state()
             self.scenes = {}
+            self.child_devices = {}
 
         def _parse_dev_dict(self, dev_dict: Dict) -> None:
             """
@@ -719,6 +722,8 @@ class HueZone(HueResource):
         Dictionary of available scenes for this zone
     children : list
         List of child device IDs in this zone
+    child_devices : dict
+        Dictionary mapping light names to HueLight objects for devices in this zone
     grouped_light_id : str
         ID of the grouped light service
     url : str
@@ -754,6 +759,7 @@ class HueZone(HueResource):
         super().__init__(dev_dict, hue_hostname, hue_key)
         self.state = self._get_state()
         self.scenes = {}
+        self.child_devices = {}
 
     def _parse_dev_dict(self, dev_dict: Dict) -> None:
         """
