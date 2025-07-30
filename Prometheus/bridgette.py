@@ -176,7 +176,7 @@ class Bridgette:
                 self._ROOM_MAP = {room.id:name for name,room in self.rooms.items()}
                 self._ZONE_MAP = {zone.id:name for name,zone in self.zones.items()}
                 self._assign_scenes()
-                self._assign_child_devices()
+                self._assign_devices()
             except Exception as e:
                 raise BridgeConnectionError(f"Error connecting to bridge: {e}")
         
@@ -348,13 +348,13 @@ class Bridgette:
             elif scene_id in self._ZONE_MAP.keys():
                 self.zones[self._ZONE_MAP[scene_id]].scenes[scene_dict['metadata']['name'].lower()] = scene_dict
     
-    def _assign_child_devices(self) -> None:
+    def _assign_devices(self) -> None:
         """
-        Assigns child device objects to their corresponding rooms and zones.
+        Assigns device objects to their corresponding rooms and zones.
 
         This method processes all lights and maps them to the appropriate room or zone
         objects based on the light's owner device ID. The lights are stored in the 
-        child_devices dictionary of each room/zone object, with the light name (lowercase) as the key.
+        devices dictionary of each room/zone object, with the light name (lowercase) as the key.
 
         The method matches light._dev_data['owner']['rid'] with the device IDs stored in 
         room/zone.children to establish the relationship between physical devices and their
@@ -368,7 +368,7 @@ class Bridgette:
             for child_device_id in room.children:
                 for light_name, light_obj in self.lights.items():
                     if light_obj._dev_data.get('owner', {}).get('rid') == child_device_id:
-                        room.child_devices[light_name] = light_obj
+                        room.devices[light_name] = light_obj
         
         # Map lights to zones - zones can contain either device IDs or light IDs
         for zone in self.zones.values():
@@ -376,10 +376,10 @@ class Bridgette:
                 for light_name, light_obj in self.lights.items():
                     # Check if child_id matches light ID directly (zones often store light IDs)
                     if light_obj.id == child_id:
-                        zone.child_devices[light_name] = light_obj
+                        zone.devices[light_name] = light_obj
                     # Also check if child_id matches owner device ID (fallback for consistency)
                     elif light_obj._dev_data.get('owner', {}).get('rid') == child_id:
-                        zone.child_devices[light_name] = light_obj
+                        zone.devices[light_name] = light_obj
     
     def turn_all_devices_off(self) -> None:
         for room in self.rooms.values():

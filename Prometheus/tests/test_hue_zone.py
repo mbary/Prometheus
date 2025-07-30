@@ -65,8 +65,8 @@ class TestHueZoneInitialization:
             assert zone.state == "false"
             assert isinstance(zone.scenes, dict)
             assert len(zone.scenes) == 0
-            assert isinstance(zone.child_devices, dict)
-            assert len(zone.child_devices) == 0
+            assert isinstance(zone.devices, dict)
+            assert len(zone.devices) == 0
 
     def test_empty_zone_initialization(self):
         """Verify that initializing a zone without devices raises appropriate error."""

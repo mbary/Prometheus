@@ -175,8 +175,8 @@ kitchen.set_scene('bright', brightness=90)
 # Smart scenes (dynamic/adaptive scenes)
 kitchen.set_smart_scene('energizing', brightness=75)
 
-# Access child devices
-for light_name, light in kitchen.child_devices.items():
+# Access devices
+for light_name, light in kitchen.devices.items():
     print(f"{light_name}: {light.state}")
 ```
 

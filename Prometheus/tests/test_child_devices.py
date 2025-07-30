@@ -64,39 +64,39 @@ def mock_zone_data():
     }
 
 
-class TestChildDeviceMapping:
-    """Tests for the child_devices mapping functionality"""
+class TestDeviceMapping:
+    """Tests for the devices mapping functionality"""
     
-    def test_room_child_devices_initialization(self, mock_room_data):
-        """Test that room child_devices attribute is properly initialized"""
+    def test_room_devices_initialization(self, mock_room_data):
+        """Test that room devices attribute is properly initialized"""
         with patch('Prometheus.device.HueResource._get') as mock_get:
             mock_get.return_value = {"data": [{"on": {"on": False}}]}
             
             room = HueRoom(mock_room_data, "test_host", "test_key")
             
-            assert hasattr(room, 'child_devices')
-            assert isinstance(room.child_devices, dict)
-            assert len(room.child_devices) == 0  # Empty until mapping occurs
+            assert hasattr(room, 'devices')
+            assert isinstance(room.devices, dict)
+            assert len(room.devices) == 0  # Empty until mapping occurs
     
-    def test_zone_child_devices_initialization(self, mock_zone_data):
-        """Test that zone child_devices attribute is properly initialized"""
+    def test_zone_devices_initialization(self, mock_zone_data):
+        """Test that zone devices attribute is properly initialized"""
         with patch('Prometheus.device.HueResource._get') as mock_get:
             mock_get.return_value = {"data": [{"on": {"on": False}}]}
             
             zone = HueZone(mock_zone_data, "test_host", "test_key")
             
-            assert hasattr(zone, 'child_devices')
-            assert isinstance(zone.child_devices, dict)
-            assert len(zone.child_devices) == 0  # Empty until mapping occurs
+            assert hasattr(zone, 'devices')
+            assert isinstance(zone.devices, dict)
+            assert len(zone.devices) == 0  # Empty until mapping occurs
 
     @patch('Prometheus.bridgette.Bridgette._get_lights')
     @patch('Prometheus.bridgette.Bridgette._get_rooms')
     @patch('Prometheus.bridgette.Bridgette._get_zones')
     @patch('Prometheus.bridgette.Bridgette._get_scenes')
-    def test_assign_child_devices_room_mapping(self, mock_scenes, mock_zones, 
+    def test_assign_devices_room_mapping(self, mock_scenes, mock_zones, 
                                              mock_rooms, mock_lights, mock_light_data, 
                                              mock_room_data):
-        """Test that child devices are correctly mapped to rooms"""
+        """Test that devices are correctly mapped to rooms"""
         
         # Create mock lights with proper owner relationships
         mock_light_1 = Mock(spec=HueLight)
@@ -116,7 +116,7 @@ class TestChildDeviceMapping:
         mock_room = Mock(spec=HueRoom)
         mock_room.id = "room_1"
         mock_room.children = ["device_1", "device_2"]  # Device IDs that match light owners
-        mock_room.child_devices = {}
+        mock_room.devices = {}
         
         mock_rooms.return_value = {"living room": mock_room}
         mock_zones.return_value = {}
@@ -128,19 +128,19 @@ class TestChildDeviceMapping:
             bridge = Bridgette()
             
             # Verify mapping occurred correctly
-            assert len(mock_room.child_devices) == 2
-            assert "living room ceiling" in mock_room.child_devices
-            assert "office desk" in mock_room.child_devices
-            assert mock_room.child_devices["living room ceiling"] == mock_light_1
-            assert mock_room.child_devices["office desk"] == mock_light_2
+            assert len(mock_room.devices) == 2
+            assert "living room ceiling" in mock_room.devices
+            assert "office desk" in mock_room.devices
+            assert mock_room.devices["living room ceiling"] == mock_light_1
+            assert mock_room.devices["office desk"] == mock_light_2
 
     @patch('Prometheus.bridgette.Bridgette._get_lights')
     @patch('Prometheus.bridgette.Bridgette._get_rooms') 
     @patch('Prometheus.bridgette.Bridgette._get_zones')
     @patch('Prometheus.bridgette.Bridgette._get_scenes')
-    def test_assign_child_devices_zone_mapping(self, mock_scenes, mock_zones,
+    def test_assign_devices_zone_mapping(self, mock_scenes, mock_zones,
                                              mock_rooms, mock_lights, mock_light_data):
-        """Test that child devices are correctly mapped to zones (using light IDs)"""
+        """Test that devices are correctly mapped to zones (using light IDs)"""
         
         # Create mock lights 
         mock_light_2 = Mock(spec=HueLight)
@@ -159,7 +159,7 @@ class TestChildDeviceMapping:
         mock_zone = Mock(spec=HueZone)
         mock_zone.id = "zone_1"
         mock_zone.children = ["light_id_2", "light_id_3"]  # Light IDs directly
-        mock_zone.child_devices = {}
+        mock_zone.devices = {}
         
         mock_rooms.return_value = {}
         mock_zones.return_value = {"office zone": mock_zone}
@@ -171,19 +171,19 @@ class TestChildDeviceMapping:
             bridge = Bridgette()
             
             # Verify zone mapping occurred correctly
-            assert len(mock_zone.child_devices) == 2
-            assert "office desk" in mock_zone.child_devices
-            assert "zone light" in mock_zone.child_devices
-            assert mock_zone.child_devices["office desk"] == mock_light_2
-            assert mock_zone.child_devices["zone light"] == mock_light_3
+            assert len(mock_zone.devices) == 2
+            assert "office desk" in mock_zone.devices
+            assert "zone light" in mock_zone.devices
+            assert mock_zone.devices["office desk"] == mock_light_2
+            assert mock_zone.devices["zone light"] == mock_light_3
 
     @patch('Prometheus.bridgette.Bridgette._get_lights')
     @patch('Prometheus.bridgette.Bridgette._get_rooms')
     @patch('Prometheus.bridgette.Bridgette._get_zones') 
     @patch('Prometheus.bridgette.Bridgette._get_scenes')
-    def test_assign_child_devices_mixed_mapping(self, mock_scenes, mock_zones,
+    def test_assign_devices_mixed_mapping(self, mock_scenes, mock_zones,
                                                mock_rooms, mock_lights, mock_light_data):
-        """Test child device mapping with both device IDs and light IDs in zones"""
+        """Test device mapping with both device IDs and light IDs in zones"""
         
         mock_light_1 = Mock(spec=HueLight)
         mock_light_1._dev_data = mock_light_data["light_1"]
@@ -205,7 +205,7 @@ class TestChildDeviceMapping:
             "light_id_1",  # Direct light ID
             "device_2"     # Device ID (should match light_2's owner)
         ]
-        mock_zone.child_devices = {}
+        mock_zone.devices = {}
         
         mock_rooms.return_value = {}
         mock_zones.return_value = {"mixed zone": mock_zone}
@@ -216,16 +216,16 @@ class TestChildDeviceMapping:
             bridge = Bridgette()
             
             # Should handle both types correctly
-            assert len(mock_zone.child_devices) == 2
-            assert "living room ceiling" in mock_zone.child_devices  # Found by light ID
-            assert "office desk" in mock_zone.child_devices  # Found by owner device ID
+            assert len(mock_zone.devices) == 2
+            assert "living room ceiling" in mock_zone.devices  # Found by light ID
+            assert "office desk" in mock_zone.devices  # Found by owner device ID
 
 
-class TestChildDeviceUsage:
-    """Tests for using child_devices functionality"""
+class TestDeviceUsage:
+    """Tests for using devices functionality"""
     
-    def test_child_device_control_access(self):
-        """Test that child devices can be accessed and controlled"""
+    def test_device_control_access(self):
+        """Test that devices can be accessed and controlled"""
         # Create a real light object for testing
         light_data = {
             "id": "test_light_1",
@@ -253,21 +253,21 @@ class TestChildDeviceUsage:
                 mock_room_get.return_value = {"data": [{"on": {"on": False}}]}
                 room = HueRoom(room_data, "test_host", "test_key")
                 
-                # Manually assign child device (simulating bridge mapping)
-                room.child_devices["test light"] = light
+                # Manually assign device (simulating bridge mapping)
+                room.devices["test light"] = light
                 
                 # Test access and control
-                assert "test light" in room.child_devices
-                assert isinstance(room.child_devices["test light"], HueLight)
-                assert room.child_devices["test light"].state == "True"
+                assert "test light" in room.devices
+                assert isinstance(room.devices["test light"], HueLight)
+                assert room.devices["test light"].state == "True"
                 
-                # Test that we can call methods on child devices
+                # Test that we can call methods on devices
                 with patch('Prometheus.device.HueResource._put') as mock_put:
-                    room.child_devices["test light"].turn_off()
+                    room.devices["test light"].turn_off()
                     mock_put.assert_called_once()
 
-    def test_empty_child_devices_handling(self):
-        """Test behavior when rooms/zones have no child devices"""
+    def test_empty_devices_handling(self):
+        """Test behavior when rooms/zones have no devices"""
         room_data = {
             "id": "empty_room",
             "metadata": {"name": "Empty Room", "archetype": "living_room"}, 
@@ -279,31 +279,31 @@ class TestChildDeviceUsage:
             mock_get.return_value = {"data": [{"on": {"on": False}}]}
             room = HueRoom(room_data, "test_host", "test_key")
             
-            assert len(room.child_devices) == 0
-            assert isinstance(room.child_devices, dict)
+            assert len(room.devices) == 0
+            assert isinstance(room.devices, dict)
             
             # Should not raise errors when accessing empty dict
-            assert "nonexistent" not in room.child_devices
-            assert list(room.child_devices.keys()) == []
+            assert "nonexistent" not in room.devices
+            assert list(room.devices.keys()) == []
 
 
-class TestChildDeviceIntegration:
-    """Integration tests for child_devices with existing functionality"""
+class TestDeviceIntegration:
+    """Integration tests for devices with existing functionality"""
     
-    def test_child_devices_docstring_updates(self):
-        """Test that docstrings properly document child_devices"""
-        # Check that HueRoom docstring mentions child_devices
+    def test_devices_docstring_updates(self):
+        """Test that docstrings properly document devices"""
+        # Check that HueRoom docstring mentions devices
         room_docstring = HueRoom.__doc__
-        assert "child_devices" in room_docstring
+        assert "devices" in room_docstring
         assert "Dictionary mapping light names to HueLight objects" in room_docstring
         
-        # Check that HueZone docstring mentions child_devices  
+        # Check that HueZone docstring mentions devices  
         zone_docstring = HueZone.__doc__
-        assert "child_devices" in zone_docstring
+        assert "devices" in zone_docstring
         assert "Dictionary mapping light names to HueLight objects" in zone_docstring
 
-    def test_child_devices_backwards_compatibility(self):
-        """Test that existing functionality still works with child_devices added"""
+    def test_devices_backwards_compatibility(self):
+        """Test that existing functionality still works with devices added"""
         room_data = {
             "id": "test_room",
             "metadata": {"name": "Test Room", "archetype": "living_room"},
@@ -322,7 +322,7 @@ class TestChildDeviceIntegration:
             assert hasattr(room, 'grouped_light_id')
             
             # New attribute should also exist
-            assert hasattr(room, 'child_devices')
+            assert hasattr(room, 'devices')
             
             # Existing methods should still work
             with patch('Prometheus.device.HueResource._put'):

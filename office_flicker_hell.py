@@ -25,7 +25,7 @@ def complete_office_chaos():
         print("❌ Office not found! Aborting chaos!")
         return
     
-    office_lights = list(office_zone.child_devices.items())
+    office_lights = list(office_zone.devices.items())
     
     print(f"🎯 OFFICE CHAOS TARGET ACQUIRED!")
     print(f"💡 {len(office_lights)} lights locked and loaded:")
@@ -211,7 +211,7 @@ def main():
         print(f"✅ INSANE flickering implemented")
         print(f"✅ Random brightness changes delivered")
         print(f"✅ Human in office thoroughly harassed")
-        print(f"\n😈 Your child_devices feature is PERFECT for chaos! 😈")
+        print(f"\n😈 Your devices feature is PERFECT for chaos! 😈")
         
     except Exception as e:
         print(f"💥 Chaos interrupted: {e}")

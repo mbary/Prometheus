@@ -199,7 +199,7 @@ class TestBridgetteConfigLoading:
 class TestBridgetteChildDeviceMapping:
     """Tests for Bridgette's child device mapping functionality"""
     
-    @patch('Prometheus.bridgette.Bridgette._assign_child_devices')
+    @patch('Prometheus.bridgette.Bridgette._assign_devices')
     @patch('Prometheus.bridgette.Bridgette._assign_scenes')
     @patch('Prometheus.bridgette.Bridgette._get_zones')
     @patch('Prometheus.bridgette.Bridgette._get_rooms') 
@@ -207,8 +207,8 @@ class TestBridgetteChildDeviceMapping:
     def test_assign_child_devices_called_during_init(self, mock_get_lights, 
                                                    mock_get_rooms, mock_get_zones,
                                                    mock_assign_scenes, 
-                                                   mock_assign_child_devices):
-        """Test that _assign_child_devices is called during Bridgette initialization"""
+                                                   mock_assign_devices):
+        """Test that _assign_devices is called during Bridgette initialization"""
         
         # Mock the required methods
         mock_get_lights.return_value = {}
@@ -219,20 +219,20 @@ class TestBridgetteChildDeviceMapping:
         with patch('builtins.open'), patch('yaml.load', return_value=mock_config), patch('pathlib.Path.exists', return_value=True):
             bridge = Bridgette()
             
-            # Verify _assign_child_devices was called
-            mock_assign_child_devices.assert_called_once()
+            # Verify _assign_devices was called
+            mock_assign_devices.assert_called_once()
             
             # Verify it's called after _assign_scenes (correct order)
             assert mock_assign_scenes.call_count == 1
-            assert mock_assign_child_devices.call_count == 1
+            assert mock_assign_devices.call_count == 1
 
     @patch('Prometheus.bridgette.Bridgette._get_scenes')
     @patch('Prometheus.bridgette.Bridgette._get_zones')
     @patch('Prometheus.bridgette.Bridgette._get_rooms')
     @patch('Prometheus.bridgette.Bridgette._get_lights')
-    def test_assign_child_devices_implementation(self, mock_get_lights, mock_get_rooms,
+    def test_assign_devices_implementation(self, mock_get_lights, mock_get_rooms,
                                                mock_get_zones, mock_get_scenes):
-        """Test the actual implementation of _assign_child_devices"""
+        """Test the actual implementation of _assign_devices"""
         
         # Create mock lights with different ID types
         mock_light_1 = Mock()
@@ -252,13 +252,13 @@ class TestBridgetteChildDeviceMapping:
         mock_room = Mock()
         mock_room.id = "room_1"
         mock_room.children = ["device_1", "device_2"]
-        mock_room.child_devices = {}
+        mock_room.devices = {}
         
         # Create mock zone (uses light IDs) 
         mock_zone = Mock()
         mock_zone.id = "zone_1"
         mock_zone.children = ["light_1", "light_2"]
-        mock_zone.child_devices = {}
+        mock_zone.devices = {}
         
         mock_get_rooms.return_value = {"living room": mock_room}
         mock_get_zones.return_value = {"office zone": mock_zone}
@@ -269,26 +269,26 @@ class TestBridgetteChildDeviceMapping:
             bridge = Bridgette()
             
             # Verify room mapping (by device ID)
-            assert len(mock_room.child_devices) == 2
-            assert "ceiling light" in mock_room.child_devices
-            assert "desk lamp" in mock_room.child_devices
-            assert mock_room.child_devices["ceiling light"] == mock_light_1
-            assert mock_room.child_devices["desk lamp"] == mock_light_2
+            assert len(mock_room.devices) == 2
+            assert "ceiling light" in mock_room.devices
+            assert "desk lamp" in mock_room.devices
+            assert mock_room.devices["ceiling light"] == mock_light_1
+            assert mock_room.devices["desk lamp"] == mock_light_2
             
             # Verify zone mapping (by light ID)
-            assert len(mock_zone.child_devices) == 2
-            assert "ceiling light" in mock_zone.child_devices
-            assert "desk lamp" in mock_zone.child_devices
-            assert mock_zone.child_devices["ceiling light"] == mock_light_1
-            assert mock_zone.child_devices["desk lamp"] == mock_light_2
+            assert len(mock_zone.devices) == 2
+            assert "ceiling light" in mock_zone.devices
+            assert "desk lamp" in mock_zone.devices
+            assert mock_zone.devices["ceiling light"] == mock_light_1
+            assert mock_zone.devices["desk lamp"] == mock_light_2
 
     @patch('Prometheus.bridgette.Bridgette._get_scenes')  
     @patch('Prometheus.bridgette.Bridgette._get_zones')
     @patch('Prometheus.bridgette.Bridgette._get_rooms')
     @patch('Prometheus.bridgette.Bridgette._get_lights')
-    def test_assign_child_devices_no_matches(self, mock_get_lights, mock_get_rooms,
+    def test_assign_devices_no_matches(self, mock_get_lights, mock_get_rooms,
                                            mock_get_zones, mock_get_scenes):
-        """Test _assign_child_devices when no child devices match"""
+        """Test _assign_devices when no devices match"""
         
         # Light with owner that doesn't match any room/zone children
         mock_light = Mock()
@@ -301,12 +301,12 @@ class TestBridgetteChildDeviceMapping:
         mock_room = Mock()
         mock_room.id = "room_2"
         mock_room.children = ["device_1", "device_2"] 
-        mock_room.child_devices = {}
+        mock_room.devices = {}
         
         mock_zone = Mock()
         mock_zone.id = "zone_2"
         mock_zone.children = ["light_1", "light_2"]
-        mock_zone.child_devices = {}
+        mock_zone.devices = {}
         
         mock_get_rooms.return_value = {"empty room": mock_room}
         mock_get_zones.return_value = {"empty zone": mock_zone}
@@ -317,16 +317,16 @@ class TestBridgetteChildDeviceMapping:
             bridge = Bridgette()
             
             # Should complete without errors, but no mappings
-            assert len(mock_room.child_devices) == 0
-            assert len(mock_zone.child_devices) == 0
+            assert len(mock_room.devices) == 0
+            assert len(mock_zone.devices) == 0
 
     @patch('Prometheus.bridgette.Bridgette._get_scenes')
     @patch('Prometheus.bridgette.Bridgette._get_zones')
     @patch('Prometheus.bridgette.Bridgette._get_rooms')
     @patch('Prometheus.bridgette.Bridgette._get_lights')
-    def test_assign_child_devices_partial_matches(self, mock_get_lights, mock_get_rooms,
+    def test_assign_devices_partial_matches(self, mock_get_lights, mock_get_rooms,
                                                  mock_get_zones, mock_get_scenes):
-        """Test _assign_child_devices with partial matches"""
+        """Test _assign_devices with partial matches"""
         
         # Create lights where only some match room/zone children
         mock_light_1 = Mock()
@@ -345,7 +345,7 @@ class TestBridgetteChildDeviceMapping:
         mock_room = Mock()
         mock_room.id = "room_3"
         mock_room.children = ["device_1", "device_2"]  # device_1 matches, device_2 doesn't
-        mock_room.child_devices = {}
+        mock_room.devices = {}
         
         mock_get_rooms.return_value = {"test room": mock_room}
         mock_get_zones.return_value = {}
@@ -356,7 +356,7 @@ class TestBridgetteChildDeviceMapping:
             bridge = Bridgette()
             
             # Only the matching light should be mapped
-            assert len(mock_room.child_devices) == 1
-            assert "matching light" in mock_room.child_devices
-            assert "orphan light" not in mock_room.child_devices
-            assert mock_room.child_devices["matching light"] == mock_light_1
+            assert len(mock_room.devices) == 1
+            assert "matching light" in mock_room.devices
+            assert "orphan light" not in mock_room.devices
+            assert mock_room.devices["matching light"] == mock_light_1
