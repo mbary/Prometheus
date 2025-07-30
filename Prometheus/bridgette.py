@@ -53,7 +53,7 @@ class Bridgette:
     Methods
     -------
     _load_bridge_config(cfg_path)
-        Loads bridge configuration from file or environment variables with fallback logic
+        Loads bridge configuration with IP preference over hostname
     _get_lights()
         Fetches all lights connected to the bridge
     _get_zones()
@@ -84,20 +84,23 @@ class Bridgette:
         If YAML configuration file is malformed
     Notes
     -----
-    The class supports multiple configuration methods in order of precedence:
-    1. YAML configuration file with 'hostname' and 'key' fields (if file exists)
-    2. Environment variables: HUE_HOSTNAME and HUE_KEY (loaded via python-dotenv)
+    The class supports multiple configuration methods with IP preference:
+    1. YAML configuration file with 'ip' (or 'hostname') and 'key' fields (if file exists)
+    2. Environment variables: HUE_IP (preferred) or HUE_HOSTNAME, and HUE_KEY (loaded via python-dotenv)
     3. Raises BridgeConfigError if neither method provides valid configuration
     
     Environment variables can be set in a .env file or system environment.
+    
+    IP addresses are preferred over hostnames to avoid DNS resolution issues
+    common in WSL environments where /etc/hosts entries are lost after reboots.
     """
     def _load_bridge_config(self, cfg_path: Path = Path('./cfg.yaml')) -> tuple[str, str]:
         """
         Load bridge configuration from file or environment variables.
         
-        This method attempts to load the Hue bridge hostname and key in the following order:
-        1. From the specified configuration file (if it exists)
-        2. From environment variables (HUE_HOSTNAME and HUE_KEY)
+        This method attempts to load the Hue bridge address and key with IP preference:
+        1. From the specified configuration file (if it exists) 
+        2. From environment variables: HUE_IP first, then HUE_HOSTNAME as fallback
         3. Raises BridgeConfigError if neither method succeeds
         
         Parameters
@@ -108,7 +111,7 @@ class Bridgette:
         Returns
         -------
         tuple[str, str]
-            A tuple containing (hostname, key) for the Hue bridge
+            A tuple containing (ip_or_hostname, key) for the Hue bridge
             
         Raises
         ------
@@ -123,38 +126,43 @@ class Bridgette:
                 with open(cfg_path, 'r') as file:
                     cfg = yaml.load(file, Loader=yaml.Loader)
                 
-                if 'hostname' in cfg and 'key' in cfg:
-                    return cfg['hostname'], cfg['key']
+                # Check for IP first, then hostname
+                bridge_address = cfg.get('ip') or cfg.get('hostname')
+                key = cfg.get('key')
+                
+                if bridge_address and key:
+                    return bridge_address, key
                 else:
-                    raise BridgeConfigError("Configuration file must contain 'hostname' and 'key' fields")
+                    raise BridgeConfigError("Configuration file must contain 'ip' (or 'hostname') and 'key' fields")
                     
             except yaml.YAMLError as e:
                 raise BridgeConfigError(f"Error parsing configuration file: {e}")
         
-        # Fallback to environment variables
-        hostname = os.getenv('HUE_HOSTNAME')
+        # Fallback to environment variables - prefer IP over hostname
+        bridge_address = os.getenv('HUE_IP') or os.getenv('HUE_HOSTNAME')
         key = os.getenv('HUE_KEY')
         
-        if hostname and key:
-            return hostname, key
+        if bridge_address and key:
+            return bridge_address, key
         
         # If neither method worked, raise error
         missing_vars = []
-        if not hostname:
-            missing_vars.append('HUE_HOSTNAME')
+        if not bridge_address:
+            missing_vars.append('HUE_IP or HUE_HOSTNAME')
         if not key:
             missing_vars.append('HUE_KEY')
             
         raise BridgeConfigError(
             f"Bridge configuration not found. Either provide a valid config file at '{cfg_path}' "
-            f"with 'hostname' and 'key' fields, or set environment variables: {', '.join(missing_vars)}"
+            f"with 'ip' (or 'hostname') and 'key' fields, or set environment variables: {', '.join(missing_vars)}"
         )
+
 
     def  __init__(self, cfg_path:Path=Path('./cfg.yaml'),) -> None:
 
         try:
-            self.__HUE_HOSTNAME, self.__HUE_KEY = self._load_bridge_config(cfg_path)
-            self.__BASE_URL = f'https://{self.__HUE_HOSTNAME}/clip/v2/resource/'
+            self.__HUE_ADDRESS, self.__HUE_KEY = self._load_bridge_config(cfg_path)
+            self.__BASE_URL = f'https://{self.__HUE_ADDRESS}/clip/v2/resource/'
             self._HEADERS = {
                         'hue-application-key':self.__HUE_KEY
                     ,   'Content-Type':'application/json'
@@ -196,7 +204,7 @@ class Bridgette:
             raw_lights = json.loads(res.text)
             
             all_lights = {dev_dict["metadata"]["name"].lower():HueLight(dev_dict=dev_dict,
-                                                                hue_hostname=self.__HUE_HOSTNAME,
+                                                                hue_hostname=self.__HUE_ADDRESS,
                                                                 hue_key=self.__HUE_KEY) for dev_dict in raw_lights["data"]}
             
             if not all_lights:
@@ -228,7 +236,7 @@ class Bridgette:
             raw_zones = json.loads(res.text)
 
             all_zones = {dev_dict['metadata']['name'].lower():HueZone(dev_dict=dev_dict,
-                                                            hue_hostname=self.__HUE_HOSTNAME,
+                                                            hue_hostname=self.__HUE_ADDRESS,
                                                             hue_key=self.__HUE_KEY) for dev_dict in raw_zones['data']}
             if not all_zones:
                 raise BridgeResponseError("No zones found on the bridge")
@@ -256,7 +264,7 @@ class Bridgette:
             raw_rooms = json.loads(res.text)
 
             all_rooms = {dev_dict["metadata"]["name"].lower():HueRoom(dev_dict=dev_dict,
-                                                            hue_hostname=self.__HUE_HOSTNAME,
+                                                            hue_hostname=self.__HUE_ADDRESS,
                                                             hue_key=self.__HUE_KEY) for dev_dict in raw_rooms["data"]}
             
             if not all_rooms:
