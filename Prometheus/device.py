@@ -432,7 +432,7 @@ class HueRoom(HueResource):
             Dictionary of available scenes for the room
         children : list
             List of child device IDs in the room
-        child_devices : dict  
+        devices : dict  
             Dictionary mapping light names to HueLight objects for devices in this room
         url : str
             API endpoint URL for this room
@@ -480,7 +480,7 @@ class HueRoom(HueResource):
             super().__init__(dev_dict, hue_hostname, hue_key)
             self.state = self._get_state()
             self.scenes = {}
-            self.child_devices = {}
+            self.devices = {}
 
         def _parse_dev_dict(self, dev_dict: Dict) -> None:
             """
@@ -722,7 +722,7 @@ class HueZone(HueResource):
         Dictionary of available scenes for this zone
     children : list
         List of child device IDs in this zone
-    child_devices : dict
+    devices : dict
         Dictionary mapping light names to HueLight objects for devices in this zone
     grouped_light_id : str
         ID of the grouped light service

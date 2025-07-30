@@ -25,7 +25,7 @@ def ultra_rapid_flicker_hell():
         print("❌ Office not found!")
         return
     
-    office_lights = list(office_zone.child_devices.items())
+    office_lights = list(office_zone.devices.items())
     available_scenes = list(office_room.scenes.keys()) if office_room.scenes else []
     
     print(f"🎯 ULTRA CHAOS TARGET: {len(office_lights)} lights!")
@@ -224,7 +224,7 @@ def main():
         print(f"✅ LIGHTNING-FAST brightness changes")
         print(f"✅ Simultaneous multi-threaded chaos")
         print(f"✅ Human in office thoroughly mind-blown")
-        print(f"\n😈 Your child_devices feature handled LIGHT-SPEED chaos! 😈")
+        print(f"\n😈 Your devices feature handled LIGHT-SPEED chaos! 😈")
         print(f"⚡ THAT WAS THE MOST INSANE FLICKERING EVER! ⚡")
         
     except Exception as e:

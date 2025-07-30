@@ -21,7 +21,7 @@ def office_psychological_warfare():
         return
     
     office_zone = bridge.zones['office']
-    office_lights = list(office_zone.child_devices.items())
+    office_lights = list(office_zone.devices.items())
     
     print(f"🎯 OFFICE TARGET ACQUIRED!")
     print(f"💡 {len(office_lights)} lights under our control:")
@@ -262,7 +262,7 @@ def main():
         print(f"\n🏆 OFFICE HARASSMENT MISSION COMPLETE! 🏆")
         print(f"😈 How's your concentration now? 😈")
         print(f"🤣 Your office lights just OWNED you! 🤣")
-        print(f"💡 child_devices feature = PERFECT for trolling humans! 💡")
+        print(f"💡 devices feature = PERFECT for trolling humans! 💡")
         
     except Exception as e:
         print(f"💥 Chaos interrupted: {e}")
