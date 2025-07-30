@@ -33,11 +33,17 @@ class Bridgette:
     Attributes
     ----------
     lights : dict
-        Dictionary of all lights connected to the bridge, with light names as keys
+        Dictionary of all lights connected to the bridge, with light IDs as keys
+    lights_by_name : dict
+        Helper dictionary mapping light names to light objects (handles duplicates)
     rooms : dict
-        Dictionary of all rooms configured on the bridge, with room names as keys
+        Dictionary of all rooms configured on the bridge, with room IDs as keys
+    rooms_by_name : dict
+        Helper dictionary mapping room names to room objects
     zones : dict
-        Dictionary of all zones configured on the bridge, with zone names as keys
+        Dictionary of all zones configured on the bridge, with zone IDs as keys
+    zones_by_name : dict
+        Helper dictionary mapping zone names to zone objects
     _ROOM_MAP : dict
         Internal mapping of room IDs to room names
     _ZONE_MAP : dict
@@ -119,14 +125,12 @@ class Bridgette:
             If configuration cannot be loaded from file or environment variables
         """
         load_dotenv()
-        
-        # Try to load from config file first
+
         if cfg_path.exists():
             try:
                 with open(cfg_path, 'r') as file:
                     cfg = yaml.load(file, Loader=yaml.Loader)
-                
-                # Check for IP first, then hostname
+
                 bridge_address = cfg.get('ip') or cfg.get('hostname')
                 key = cfg.get('key')
                 
@@ -137,15 +141,13 @@ class Bridgette:
                     
             except yaml.YAMLError as e:
                 raise BridgeConfigError(f"Error parsing configuration file: {e}")
-        
-        # Fallback to environment variables - prefer IP over hostname
+
         bridge_address = os.getenv('HUE_IP') or os.getenv('HUE_HOSTNAME')
         key = os.getenv('HUE_KEY')
         
         if bridge_address and key:
             return bridge_address, key
-        
-        # If neither method worked, raise error
+
         missing_vars = []
         if not bridge_address:
             missing_vars.append('HUE_IP or HUE_HOSTNAME')
@@ -167,14 +169,14 @@ class Bridgette:
                         'hue-application-key':self.__HUE_KEY
                     ,   'Content-Type':'application/json'
             }
-            # Initialise all devices
+
             try:
-                self.lights = self._get_lights()
-                self.rooms = self._get_rooms()
-                self.zones = self._get_zones()
+                self.lights = self._get_lights() 
+                self.rooms = self._get_rooms() 
+                self.zones = self._get_zones() 
                 
-                self._ROOM_MAP = {room.id:name for name,room in self.rooms.items()}
-                self._ZONE_MAP = {zone.id:name for name,zone in self.zones.items()}
+                self._ROOM_MAP = {room.id:room.name for room in self.rooms.values()}
+                self._ZONE_MAP = {zone.id:zone.name for zone in self.zones.values()}
                 self._assign_scenes()
                 self._assign_devices()
             except Exception as e:
@@ -188,7 +190,7 @@ class Bridgette:
     def _get_lights(self) -> List[Dict[str, HueLight]]:
         """ Fetches all lights' connected to te Bridge details
         Returns:
-            List[Dict[str, HueLight]]: Dictionary where key is light name (lowercase) and value is HueLight object
+            List[Dict[str, HueLight]]: Dictionary where key is light ID and value is HueLight object
         Raises:
             BridgeResponseError: If no lights are found or response format is invalid
             BridgeConnectionError: If there is an error connecting to or getting data from the bridge
@@ -203,7 +205,7 @@ class Bridgette:
             
             raw_lights = json.loads(res.text)
             
-            all_lights = {dev_dict["metadata"]["name"].lower():HueLight(dev_dict=dev_dict,
+            all_lights = {dev_dict["id"]:HueLight(dev_dict=dev_dict,
                                                                 hue_hostname=self.__HUE_ADDRESS,
                                                                 hue_key=self.__HUE_KEY) for dev_dict in raw_lights["data"]}
             
@@ -220,7 +222,7 @@ class Bridgette:
         This method queries the Hue Bridge API for all available zones and creates
         HueZone objects for each zone found.
         Returns:
-            List[Dict[str, HueZone]]: A dictionary mapping zone names (lowercase) to HueZone objects
+            List[Dict[str, HueZone]]: A dictionary mapping zone names to HueZone objects
         Raises:
             BridgeResponseError: If no zones are found or the Bridge response is invalid
             BridgeConnectionError: If there's an error connecting to or communicating with the Bridge
@@ -235,7 +237,7 @@ class Bridgette:
                 raise BridgeResponseError(f"Error fetching zones: {res.text}")
             raw_zones = json.loads(res.text)
 
-            all_zones = {dev_dict['metadata']['name'].lower():HueZone(dev_dict=dev_dict,
+            all_zones = {dev_dict["metadata"]["name"].lower():HueZone(dev_dict=dev_dict,
                                                             hue_hostname=self.__HUE_ADDRESS,
                                                             hue_key=self.__HUE_KEY) for dev_dict in raw_zones['data']}
             if not all_zones:
@@ -249,7 +251,7 @@ class Bridgette:
         """
         Retrieves all rooms configured on the Philips Hue Bridge.
         Returns:
-            List[Dict[str,HueRoom]]: Dictionary mapping room names (lowercase) to HueRoom objects
+            List[Dict[str,HueRoom]]: Dictionary mapping room names to HueRoom objects
         Raises:
             BridgeResponseError: If no rooms are found or bridge returns invalid response
             BridgeConnectionError: If there is an error connecting to or communicating with the bridge
@@ -344,9 +346,13 @@ class Bridgette:
         for scene_dict in all_scenes:
             scene_id = scene_dict['group']['rid']
             if scene_id in self._ROOM_MAP.keys():
-                self.rooms[self._ROOM_MAP[scene_id]].scenes[scene_dict['metadata']['name'].lower()] = scene_dict
+
+                room_name = self._ROOM_MAP[scene_id]
+                self.rooms[room_name].scenes[scene_dict['metadata']['name'].lower()] = scene_dict
             elif scene_id in self._ZONE_MAP.keys():
-                self.zones[self._ZONE_MAP[scene_id]].scenes[scene_dict['metadata']['name'].lower()] = scene_dict
+
+                zone_name = self._ZONE_MAP[scene_id]
+                self.zones[zone_name].scenes[scene_dict['metadata']['name'].lower()] = scene_dict
     
     def _assign_devices(self) -> None:
         """
@@ -363,29 +369,27 @@ class Bridgette:
         Returns:
             None
         """
-        # Map lights to rooms based on owner device ID
+
         for room in self.rooms.values():
             for child_device_id in room.children:
-                for light_name, light_obj in self.lights.items():
+                for _, light_obj in self.lights.items():
                     if light_obj._dev_data.get('owner', {}).get('rid') == child_device_id:
-                        room.devices[light_name] = light_obj
-        
-        # Map lights to zones - zones can contain either device IDs or light IDs
+                        room.devices[light_obj.name] = light_obj
+
         for zone in self.zones.values():
             for child_id in zone.children:
-                for light_name, light_obj in self.lights.items():
-                    # Check if child_id matches light ID directly (zones often store light IDs)
+                for _, light_obj in self.lights.items():
                     if light_obj.id == child_id:
-                        zone.devices[light_name] = light_obj
-                    # Also check if child_id matches owner device ID (fallback for consistency)
+                        zone.devices[light_obj.name] = light_obj
                     elif light_obj._dev_data.get('owner', {}).get('rid') == child_id:
-                        zone.devices[light_name] = light_obj
+                        zone.devices[light_obj.name] = light_obj
+    
     
     def turn_all_devices_off(self) -> None:
         for room in self.rooms.values():
             room.turn_off()
 
     def turn_all_lights_on(self) -> None:
-        for light in self.lights:
+        for light in self.lights.values():
             if light.dev_type != 'plug':
                 light.turn_on()

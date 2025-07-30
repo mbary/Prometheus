@@ -238,14 +238,16 @@ class TestBridgetteChildDeviceMapping:
         mock_light_1 = Mock()
         mock_light_1._dev_data = {"owner": {"rid": "device_1"}}
         mock_light_1.id = "light_1"
+        mock_light_1.name = "ceiling light"
         
         mock_light_2 = Mock()
         mock_light_2._dev_data = {"owner": {"rid": "device_2"}}  
         mock_light_2.id = "light_2"
+        mock_light_2.name = "desk lamp"
         
         mock_get_lights.return_value = {
-            "ceiling light": mock_light_1,
-            "desk lamp": mock_light_2
+            "light_1": mock_light_1,
+            "light_2": mock_light_2
         }
         
         # Create mock room (uses device IDs)
@@ -260,8 +262,12 @@ class TestBridgetteChildDeviceMapping:
         mock_zone.children = ["light_1", "light_2"]
         mock_zone.devices = {}
         
-        mock_get_rooms.return_value = {"living room": mock_room}
-        mock_get_zones.return_value = {"office zone": mock_zone}
+        # Create mock room and zone with proper attributes
+        mock_room.name = "living room"
+        mock_zone.name = "office zone"
+        
+        mock_get_rooms.return_value = {"room_1": mock_room}
+        mock_get_zones.return_value = {"zone_1": mock_zone}
         mock_get_scenes.return_value = []
         
         mock_config = {'hostname': 'test_host', 'key': 'test_key'}
@@ -332,14 +338,16 @@ class TestBridgetteChildDeviceMapping:
         mock_light_1 = Mock()
         mock_light_1._dev_data = {"owner": {"rid": "device_1"}}  # Will match room
         mock_light_1.id = "light_1"
+        mock_light_1.name = "matching light"
         
         mock_light_2 = Mock()
         mock_light_2._dev_data = {"owner": {"rid": "device_999"}}  # Won't match anything
         mock_light_2.id = "light_999"
+        mock_light_2.name = "orphan light"
         
         mock_get_lights.return_value = {
-            "matching light": mock_light_1,
-            "orphan light": mock_light_2
+            "light_1": mock_light_1,
+            "light_999": mock_light_2
         }
         
         mock_room = Mock()
@@ -347,7 +355,8 @@ class TestBridgetteChildDeviceMapping:
         mock_room.children = ["device_1", "device_2"]  # device_1 matches, device_2 doesn't
         mock_room.devices = {}
         
-        mock_get_rooms.return_value = {"test room": mock_room}
+        mock_room.name = "test room"
+        mock_get_rooms.return_value = {"room_3": mock_room}
         mock_get_zones.return_value = {}
         mock_get_scenes.return_value = []
         
