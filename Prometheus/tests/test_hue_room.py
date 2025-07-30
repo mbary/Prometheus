@@ -70,6 +70,8 @@ class TestHueRoomInitialization:
             assert room.state == "false"
             assert isinstance(room.scenes, dict)
             assert len(room.scenes) == 0
+            assert isinstance(room.child_devices, dict)
+            assert len(room.child_devices) == 0
 
     def test_invalid_room_configuration(self):
         """Test initialization with invalid room configuration"""

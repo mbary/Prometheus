@@ -7,6 +7,7 @@ from pathlib import Path
 from pprint import pprint
 from typing import List, Dict, Union
 import warnings
+from dotenv import load_dotenv
 warnings.filterwarnings('ignore')
 
 
@@ -21,10 +22,14 @@ class Bridgette:
     """Bridgette class for controlling Philips Hue bridge and connected devices.
     A class that provides interface for controlling Philips Hue bridge and its connected devices
     like lights, rooms and zones. It handles authentication, device discovery and scene management.
+    
+    The class supports flexible configuration loading from either YAML files or environment variables.
+    
     Parameters
     ----------
     cfg_path : Path, optional
         Path to YAML configuration file containing bridge hostname and key (default is './cfg.yaml')
+        If the file doesn't exist, the class will attempt to load configuration from environment variables
     Attributes
     ----------
     lights : dict
@@ -47,6 +52,8 @@ class Bridgette:
         HTTP headers used for API requests
     Methods
     -------
+    _load_bridge_config(cfg_path)
+        Loads bridge configuration with IP preference over hostname
     _get_lights()
         Fetches all lights connected to the bridge
     _get_zones()
@@ -66,7 +73,7 @@ class Bridgette:
     Raises
     ------
     BridgeConfigError
-        If configuration file is not found or is invalid
+        If configuration cannot be loaded from file or environment variables, or if configuration is invalid
     BridgeConnectionError
         If unable to connect to or fetch data from the bridge
     BridgeResponseError
@@ -77,26 +84,85 @@ class Bridgette:
         If YAML configuration file is malformed
     Notes
     -----
-    The class requires a YAML configuration file containing 'hostname' and 'key' fields
-    for the Hue bridge authentication.
+    The class supports multiple configuration methods with IP preference:
+    1. YAML configuration file with 'ip' (or 'hostname') and 'key' fields (if file exists)
+    2. Environment variables: HUE_IP (preferred) or HUE_HOSTNAME, and HUE_KEY (loaded via python-dotenv)
+    3. Raises BridgeConfigError if neither method provides valid configuration
+    
+    Environment variables can be set in a .env file or system environment.
+    
+    IP addresses are preferred over hostnames to avoid DNS resolution issues
+    common in WSL environments where /etc/hosts entries are lost after reboots.
     """
+    def _load_bridge_config(self, cfg_path: Path = Path('./cfg.yaml')) -> tuple[str, str]:
+        """
+        Load bridge configuration from file or environment variables.
+        
+        This method attempts to load the Hue bridge address and key with IP preference:
+        1. From the specified configuration file (if it exists) 
+        2. From environment variables: HUE_IP first, then HUE_HOSTNAME as fallback
+        3. Raises BridgeConfigError if neither method succeeds
+        
+        Parameters
+        ----------
+        cfg_path : Path, optional
+            Path to YAML configuration file (default is './cfg.yaml')
+            
+        Returns
+        -------
+        tuple[str, str]
+            A tuple containing (ip_or_hostname, key) for the Hue bridge
+            
+        Raises
+        ------
+        BridgeConfigError
+            If configuration cannot be loaded from file or environment variables
+        """
+        load_dotenv()
+        
+        # Try to load from config file first
+        if cfg_path.exists():
+            try:
+                with open(cfg_path, 'r') as file:
+                    cfg = yaml.load(file, Loader=yaml.Loader)
+                
+                # Check for IP first, then hostname
+                bridge_address = cfg.get('ip') or cfg.get('hostname')
+                key = cfg.get('key')
+                
+                if bridge_address and key:
+                    return bridge_address, key
+                else:
+                    raise BridgeConfigError("Configuration file must contain 'ip' (or 'hostname') and 'key' fields")
+                    
+            except yaml.YAMLError as e:
+                raise BridgeConfigError(f"Error parsing configuration file: {e}")
+        
+        # Fallback to environment variables - prefer IP over hostname
+        bridge_address = os.getenv('HUE_IP') or os.getenv('HUE_HOSTNAME')
+        key = os.getenv('HUE_KEY')
+        
+        if bridge_address and key:
+            return bridge_address, key
+        
+        # If neither method worked, raise error
+        missing_vars = []
+        if not bridge_address:
+            missing_vars.append('HUE_IP or HUE_HOSTNAME')
+        if not key:
+            missing_vars.append('HUE_KEY')
+            
+        raise BridgeConfigError(
+            f"Bridge configuration not found. Either provide a valid config file at '{cfg_path}' "
+            f"with 'ip' (or 'hostname') and 'key' fields, or set environment variables: {', '.join(missing_vars)}"
+        )
+
+
     def  __init__(self, cfg_path:Path=Path('./cfg.yaml'),) -> None:
 
         try:
-            
-            ##TODO I will have to change this so no cfg file is required
-            if not cfg_path.exists():
-                raise BridgeConfigError(f"Configuration file not found at {cfg_path}")
-            
-            with open(cfg_path, 'r') as file:
-                self.cfg = yaml.load(file, Loader=yaml.Loader)
-
-            if 'hostname' not in self.cfg.keys() or 'key' not in self.cfg.keys():
-                raise BridgeConfigError("Configuration file must contain 'hostname' and 'key' fields")
-            
-            self.__HUE_HOSTNAME = self.cfg['hostname']
-            self.__HUE_KEY = self.cfg["key"]
-            self.__BASE_URL = f'https://{self.__HUE_HOSTNAME}/clip/v2/resource/'
+            self.__HUE_ADDRESS, self.__HUE_KEY = self._load_bridge_config(cfg_path)
+            self.__BASE_URL = f'https://{self.__HUE_ADDRESS}/clip/v2/resource/'
             self._HEADERS = {
                         'hue-application-key':self.__HUE_KEY
                     ,   'Content-Type':'application/json'
@@ -110,6 +176,7 @@ class Bridgette:
                 self._ROOM_MAP = {room.id:name for name,room in self.rooms.items()}
                 self._ZONE_MAP = {zone.id:name for name,zone in self.zones.items()}
                 self._assign_scenes()
+                self._assign_child_devices()
             except Exception as e:
                 raise BridgeConnectionError(f"Error connecting to bridge: {e}")
         
@@ -137,7 +204,7 @@ class Bridgette:
             raw_lights = json.loads(res.text)
             
             all_lights = {dev_dict["metadata"]["name"].lower():HueLight(dev_dict=dev_dict,
-                                                                hue_hostname=self.__HUE_HOSTNAME,
+                                                                hue_hostname=self.__HUE_ADDRESS,
                                                                 hue_key=self.__HUE_KEY) for dev_dict in raw_lights["data"]}
             
             if not all_lights:
@@ -169,7 +236,7 @@ class Bridgette:
             raw_zones = json.loads(res.text)
 
             all_zones = {dev_dict['metadata']['name'].lower():HueZone(dev_dict=dev_dict,
-                                                            hue_hostname=self.__HUE_HOSTNAME,
+                                                            hue_hostname=self.__HUE_ADDRESS,
                                                             hue_key=self.__HUE_KEY) for dev_dict in raw_zones['data']}
             if not all_zones:
                 raise BridgeResponseError("No zones found on the bridge")
@@ -197,7 +264,7 @@ class Bridgette:
             raw_rooms = json.loads(res.text)
 
             all_rooms = {dev_dict["metadata"]["name"].lower():HueRoom(dev_dict=dev_dict,
-                                                            hue_hostname=self.__HUE_HOSTNAME,
+                                                            hue_hostname=self.__HUE_ADDRESS,
                                                             hue_key=self.__HUE_KEY) for dev_dict in raw_rooms["data"]}
             
             if not all_rooms:
@@ -280,6 +347,39 @@ class Bridgette:
                 self.rooms[self._ROOM_MAP[scene_id]].scenes[scene_dict['metadata']['name'].lower()] = scene_dict
             elif scene_id in self._ZONE_MAP.keys():
                 self.zones[self._ZONE_MAP[scene_id]].scenes[scene_dict['metadata']['name'].lower()] = scene_dict
+    
+    def _assign_child_devices(self) -> None:
+        """
+        Assigns child device objects to their corresponding rooms and zones.
+
+        This method processes all lights and maps them to the appropriate room or zone
+        objects based on the light's owner device ID. The lights are stored in the 
+        child_devices dictionary of each room/zone object, with the light name (lowercase) as the key.
+
+        The method matches light._dev_data['owner']['rid'] with the device IDs stored in 
+        room/zone.children to establish the relationship between physical devices and their
+        containing spaces.
+
+        Returns:
+            None
+        """
+        # Map lights to rooms based on owner device ID
+        for room in self.rooms.values():
+            for child_device_id in room.children:
+                for light_name, light_obj in self.lights.items():
+                    if light_obj._dev_data.get('owner', {}).get('rid') == child_device_id:
+                        room.child_devices[light_name] = light_obj
+        
+        # Map lights to zones - zones can contain either device IDs or light IDs
+        for zone in self.zones.values():
+            for child_id in zone.children:
+                for light_name, light_obj in self.lights.items():
+                    # Check if child_id matches light ID directly (zones often store light IDs)
+                    if light_obj.id == child_id:
+                        zone.child_devices[light_name] = light_obj
+                    # Also check if child_id matches owner device ID (fallback for consistency)
+                    elif light_obj._dev_data.get('owner', {}).get('rid') == child_id:
+                        zone.child_devices[light_name] = light_obj
     
     def turn_all_devices_off(self) -> None:
         for room in self.rooms.values():

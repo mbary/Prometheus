@@ -130,8 +130,7 @@ class TestHueLight:
             mock_put.assert_called_once_with(
                 light.url,
                 light._HEADERS,
-                {'on': {'on': True}},
-                verify=False
+                {'on': {'on': True}}
             )
             
             # Verify state was updated
@@ -158,8 +157,7 @@ class TestHueLight:
             mock_put.assert_called_with(
                 light.url,
                 light._HEADERS,
-                {"dimming": {"brightness": 100}},
-                verify=False
+                {"dimming": {"brightness": 100}}
             )
             
             # Test with value below minimum
@@ -167,6 +165,5 @@ class TestHueLight:
             mock_put.assert_called_with(
                 light.url,
                 light._HEADERS,
-                {"dimming": {"brightness": 0}},
-                verify=False
+                {"dimming": {"brightness": 0}}
             )
