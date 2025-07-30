@@ -102,15 +102,17 @@ class TestDeviceMapping:
         mock_light_1 = Mock(spec=HueLight)
         mock_light_1._dev_data = mock_light_data["light_1"]
         mock_light_1.id = "light_id_1"
+        mock_light_1.name = "living room ceiling"
         
         mock_light_2 = Mock(spec=HueLight)  
         mock_light_2._dev_data = mock_light_data["light_2"]
         mock_light_2.id = "light_id_2"
+        mock_light_2.name = "office desk"
         
         # Mock the bridge methods
         mock_lights.return_value = {
-            "living room ceiling": mock_light_1,
-            "office desk": mock_light_2
+            "light_id_1": mock_light_1,
+            "light_id_2": mock_light_2
         }
         
         mock_room = Mock(spec=HueRoom)
@@ -118,7 +120,8 @@ class TestDeviceMapping:
         mock_room.children = ["device_1", "device_2"]  # Device IDs that match light owners
         mock_room.devices = {}
         
-        mock_rooms.return_value = {"living room": mock_room}
+        mock_room.name = "living room"
+        mock_rooms.return_value = {"room_1": mock_room}
         mock_zones.return_value = {}
         mock_scenes.return_value = []
         
@@ -146,14 +149,16 @@ class TestDeviceMapping:
         mock_light_2 = Mock(spec=HueLight)
         mock_light_2._dev_data = mock_light_data["light_2"] 
         mock_light_2.id = "light_id_2"
+        mock_light_2.name = "office desk"
         
         mock_light_3 = Mock(spec=HueLight)
         mock_light_3._dev_data = mock_light_data["light_3"]
         mock_light_3.id = "light_id_3"
+        mock_light_3.name = "zone light"
         
         mock_lights.return_value = {
-            "office desk": mock_light_2,
-            "zone light": mock_light_3
+            "light_id_2": mock_light_2,
+            "light_id_3": mock_light_3
         }
         
         mock_zone = Mock(spec=HueZone)
@@ -162,7 +167,8 @@ class TestDeviceMapping:
         mock_zone.devices = {}
         
         mock_rooms.return_value = {}
-        mock_zones.return_value = {"office zone": mock_zone}
+        mock_zone.name = "office zone"
+        mock_zones.return_value = {"zone_1": mock_zone}
         mock_scenes.return_value = []
         
         mock_config = {'hostname': 'test_host', 'key': 'test_key'}
@@ -188,14 +194,16 @@ class TestDeviceMapping:
         mock_light_1 = Mock(spec=HueLight)
         mock_light_1._dev_data = mock_light_data["light_1"]
         mock_light_1.id = "light_id_1"
+        mock_light_1.name = "living room ceiling"
         
         mock_light_2 = Mock(spec=HueLight)
         mock_light_2._dev_data = mock_light_data["light_2"] 
         mock_light_2.id = "light_id_2"
+        mock_light_2.name = "office desk"
         
         mock_lights.return_value = {
-            "living room ceiling": mock_light_1,
-            "office desk": mock_light_2
+            "light_id_1": mock_light_1,
+            "light_id_2": mock_light_2
         }
         
         # Zone with mixed ID types
@@ -208,7 +216,8 @@ class TestDeviceMapping:
         mock_zone.devices = {}
         
         mock_rooms.return_value = {}
-        mock_zones.return_value = {"mixed zone": mock_zone}
+        mock_zone.name = "mixed zone"
+        mock_zones.return_value = {"zone_mixed": mock_zone}
         mock_scenes.return_value = []
         
         mock_config = {'hostname': 'test_host', 'key': 'test_key'}
