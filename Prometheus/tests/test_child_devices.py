@@ -85,9 +85,9 @@ class TestDeviceMapping:
             
             zone = HueZone(mock_zone_data, "test_host", "test_key")
             
-            assert hasattr(zone, 'child_devices')
-            assert isinstance(zone.child_devices, dict)
-            assert len(zone.child_devices) == 0  # Empty until mapping occurs
+            assert hasattr(zone, 'devices')
+            assert isinstance(zone.devices, dict)
+            assert len(zone.devices) == 0  # Empty until mapping occurs
 
     @patch('Prometheus.bridgette.Bridgette._get_lights')
     @patch('Prometheus.bridgette.Bridgette._get_rooms')
@@ -159,7 +159,7 @@ class TestDeviceMapping:
         mock_zone = Mock(spec=HueZone)
         mock_zone.id = "zone_1"
         mock_zone.children = ["light_id_2", "light_id_3"]  # Light IDs directly
-        mock_zone.child_devices = {}
+        mock_zone.devices = {}
         
         mock_rooms.return_value = {}
         mock_zones.return_value = {"office zone": mock_zone}
@@ -205,7 +205,7 @@ class TestDeviceMapping:
             "light_id_1",  # Direct light ID
             "device_2"     # Device ID (should match light_2's owner)
         ]
-        mock_zone.child_devices = {}
+        mock_zone.devices = {}
         
         mock_rooms.return_value = {}
         mock_zones.return_value = {"mixed zone": mock_zone}

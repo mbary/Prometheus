@@ -759,7 +759,7 @@ class HueZone(HueResource):
         super().__init__(dev_dict, hue_hostname, hue_key)
         self.state = self._get_state()
         self.scenes = {}
-        self.child_devices = {}
+        self.devices = {}
 
     def _parse_dev_dict(self, dev_dict: Dict) -> None:
         """
