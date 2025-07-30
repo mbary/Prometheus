@@ -385,7 +385,7 @@ class Bridgette:
                         zone.devices[light_obj.name] = light_obj
     
     
-    def turn_all_devices_off(self) -> None:
+    def turn_all_lights_off(self) -> None:
         for room in self.rooms.values():
             room.turn_off()
 
