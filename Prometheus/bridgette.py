@@ -393,3 +393,132 @@ class Bridgette:
         for light in self.lights.values():
             if light.dev_type != 'plug':
                 light.turn_on()
+
+    def get_current_state(self) -> Dict[str, Dict]:
+        """
+        Returns a dictionary with the current state of all devices/rooms/zones connected to the bridge.
+        
+        Returns:
+            Dict[str, Dict]: Dictionary with the following structure:
+                {
+                    'zones': {
+                        'zone1': {
+                            'zone_state': {'state': 'on'/'off', 'scene': None/current_scene},
+                            'devices': {
+                                'device1': {'state': 'on'/'off', 'brightness': int, 'colour_temperature': int},
+                                'device2': {...}
+                            }
+                        },
+                        'zone2': {...}
+                    },
+                    'rooms': {
+                        'room1': {
+                            'room_state': {'state': 'on'/'off', 'scene': None/current_scene},
+                            'devices': {
+                                'device1': {'state': 'on'/'off', 'brightness': int, 'colour_temperature': int},
+                                'device2': {...}
+                            }
+                        },
+                        'room2': {...}
+                    }
+                }
+        """
+        current_state = {
+            'zones': {},
+            'rooms': {}
+        }
+        for zone_name, zone_obj in self.zones.items():
+            zone_obj.state = zone_obj._get_state()
+            
+            current_state['zones'][zone_name] = {
+                'zone_state': {
+                    'state': 'on' if zone_obj.state.lower() == 'true' else 'off',
+                    'scene': self._get_active_scene_for_group(zone_obj)
+                },
+                'devices': self._get_devices_state(zone_obj.devices)
+            }
+
+        for room_name, room_obj in self.rooms.items():
+            room_obj.state = room_obj._get_state()
+            
+            current_state['rooms'][room_name] = {
+                'room_state': {
+                    'state': 'on' if room_obj.state.lower() == 'true' else 'off',
+                    'scene': self._get_active_scene_for_group(room_obj)
+                },
+                'devices': self._get_devices_state(room_obj.devices)
+            }
+        
+        return current_state
+
+    def _get_active_scene_for_group(self, room_or_zone_obj) -> Union[str, None]:
+        """
+        Gets the currently active scene (regular or smart) for a room or zone.
+        
+        Args:
+            room_or_zone_obj: HueRoom or HueZone object
+            
+        Returns:
+            Union[str, None]: Name of active scene or None if no scene is active
+        """
+        try:
+            for scene_name, scene_data in room_or_zone_obj.scenes.items():
+                scene_id = scene_data['id']
+                scene_type = scene_data.get('type', 'scene')
+
+                scene_url = room_or_zone_obj.base_url + f"{scene_type}/{scene_id}"
+                fresh_scene_response = room_or_zone_obj._get(scene_url)
+                
+                if fresh_scene_response.get('data') and len(fresh_scene_response['data']) > 0:
+                    fresh_scene_data = fresh_scene_response['data'][0]
+
+                    if scene_type == 'scene':
+                        if fresh_scene_data.get('status', {}).get('active') != 'inactive':
+                            return scene_name
+
+                    elif scene_type == 'smart_scene':
+                        if fresh_scene_data.get('state') != 'inactive':
+                            return scene_name
+            
+            return None
+        except Exception:
+            return None
+
+    def _get_devices_state(self, devices_dict: Dict) -> Dict[str, Dict]:
+        """
+        Extracts current state information for all devices in a collection.
+        
+        Args:
+            devices_dict: Dictionary mapping device names to HueLight objects
+            
+        Returns:
+            Dict[str, Dict]: Dictionary mapping device names to their current state information
+        """
+        devices_state = {}
+        
+        for device_name, device_obj in devices_dict.items():
+            try:
+                fresh_state = device_obj._initialise_state()
+                
+                device_state = {
+                    'state': 'on' if fresh_state.is_on else 'off'
+                }
+
+                if not device_obj._is_plug:
+                    device_state['brightness'] = fresh_state.brightness
+                    device_state['colour_temperature'] = fresh_state.colour_temp
+                
+                devices_state[device_name] = device_state
+                
+            except Exception:
+                device_state = {
+                    'state': 'on' if device_obj.state == 'true' else 'off'
+                }
+                
+                if not device_obj._is_plug:
+                    device_state['brightness'] = device_obj.brightness_level
+                    device_state['colour_temperature'] = device_obj.colour_temperature
+                
+                devices_state[device_name] = device_state
+        
+        return devices_state
