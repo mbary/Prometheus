@@ -10,6 +10,7 @@ One cannot, for example, use siri to change the brightness without having to pur
 **[EDIT]**<br>
 Well, it turns out apple has made some changes, no longer requiring a homehub device to operate the lights (this does not work with older hue bridges though). My rebelious spirit made me write this prior to these updates so yeah, it was a fun project nonetheless.<br>
 
+I still want to have a locally served ai agent that utilises this package. so lookout for prometheus_ai©
 
 ## Overview
 
@@ -20,11 +21,6 @@ Prometheus is a comprehensive Python package that provides intuitive control ove
 - **Flexible Configuration**: YAML files, environment variables, or direct IP configuration
 - **Device Management**: Control individual lights, rooms, and zones
 - **Scene Control**: Activate and manage lighting scenes and smart scenes  
-- **WSL-Friendly**: IP-first configuration to avoid DNS resolution issues
-- **Modern API**: Built on Philips Hue Bridge API v2
-- **Robust Error Handling**: Comprehensive exception hierarchy
-- **Well Documented**: Type hints and detailed docstrings
-- **Tested**: Comprehensive unit test coverage
 
 ## Installation
 
@@ -200,7 +196,7 @@ print("Available scenes:", list(downstairs.scenes.keys()))
 
 ### Scene Management
 
-Scenes are automatically discovered and assigned to their respective rooms/zones:
+Scenes are automatically discovered and assigned to their respective rooms/zones as HueScene objects:
 
 ```python
 # List all scenes for a room
@@ -214,6 +210,20 @@ office.set_scene('relax', 30)       # 30% brightness
 # Smart scenes adapt throughout the day
 office.set_smart_scene('natural light')
 office.set_smart_scene('energizing', 85)
+
+# Access HueScene objects directly
+focus_scene = office.scenes['focus']
+print(f"Scene type: {focus_scene.type}")        # 'scene' or 'smart_scene'
+print(f"Scene status: {focus_scene.status}")    # 'on' or 'off'
+print(f"Scene metadata: {focus_scene.metadata}")
+
+# Turn scenes on/off directly
+focus_scene.turn_on()
+focus_scene.turn_off()
+
+# Check current state of all rooms/zones including active scenes
+current_state = bridge.get_current_state()
+print(f"Office scene: {current_state['rooms']['office']['room_state']['scene']}")
 ```
 
 ## Architecture
@@ -224,7 +234,8 @@ office.set_smart_scene('energizing', 85)
 HueResource (Base)
 ├── HueLight      - Individual lights and smart plugs
 ├── HueRoom       - Room-based device groups with scene management  
-└── HueZone       - Zone-based device groups with scene management
+├── HueZone       - Zone-based device groups with scene management
+└── HueScene      - Scene objects with status monitoring and control
 
 Bridgette         - Main controller and bridge interface
 ```
@@ -341,6 +352,7 @@ Prometheus/
 | `__init__(cfg_path)` | Initialize bridge connection |
 | `turn_all_devices_off()` | Turn off all connected devices |
 | `turn_all_lights_on()` | Turn on all lights (excluding plugs) |
+| `get_current_state()` | Get current state of all rooms/zones with active scenes |
 
 **Properties:**
 - `lights`: Dictionary of HueLight objects
@@ -365,6 +377,25 @@ Prometheus/
 | `change_brightness(level)` | `level: int` (0-100) | Set brightness for all lights |
 | `set_scene(name, brightness)` | `name: str`, `brightness: int` | Activate scene |
 | `set_smart_scene(name, brightness)` | `name: str`, `brightness: int` | Activate smart scene |
+
+**Properties:**
+- `scenes`: Dictionary of HueScene objects
+- `devices`: Dictionary of HueLight objects in this room/zone
+
+### HueScene Class
+
+| Method | Parameters | Description |
+|--------|-----------|-------------|
+| `turn_on()` | None | Activate the scene |
+| `turn_off()` | None | Deactivate the scene |
+
+**Properties:**
+- `id`: Scene ID from the bridge
+- `type`: Scene type ('scene' or 'smart_scene')
+- `status`: Current scene status ('on' or 'off') - fetches fresh data from bridge
+- `metadata`: Dictionary containing scene information and bridge data
+
+**Note:** Smart scenes take priority over regular scenes in status detection. When `get_current_state()` is called and both a smart scene and regular scene are active, the smart scene will be reported as the active scene.
 
 ## Troubleshooting
 
@@ -412,9 +443,19 @@ The library maintains device states through several mechanisms:
 Scenes are discovered and assigned during bridge initialization:
 
 1. **Scene Discovery**: Fetch all regular and smart scenes from the bridge
-2. **Group Mapping**: Match scenes to rooms/zones based on group IDs
-3. **Scene Storage**: Scenes are stored in the `scenes` dictionary of their parent group
-4. **Case Handling**: Scene names are normalized to lowercase for consistent access
+2. **HueScene Creation**: Create HueScene objects for each discovered scene
+3. **Group Mapping**: Match scenes to rooms/zones based on group IDs
+4. **Scene Storage**: HueScene objects are stored in the `scenes` dictionary of their parent group
+5. **Case Handling**: Scene names are normalized to lowercase for consistent access
+6. **Status Monitoring**: HueScene objects fetch live status data from the bridge when accessed
+
+### Scene Priority Logic
+
+When determining active scenes, the system follows this priority:
+
+1. **Smart Scene Priority**: Smart scenes are checked first and take precedence
+2. **Regular Scene Fallback**: Regular scenes are only considered if no smart scene is active
+3. **Live Status**: All scene status checks fetch fresh data from the bridge to ensure accuracy
 
 ### Smart Room Behavior
 
