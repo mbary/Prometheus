@@ -471,26 +471,30 @@ class Bridgette:
         """
         try:
             for scene_name, scene_obj in room_or_zone_obj.scenes.items():
-                # Get fresh status from the bridge
-                scene_url = scene_obj.url
-                fresh_scene_response = room_or_zone_obj._get(scene_url)
-                
-                if fresh_scene_response.get('data') and len(fresh_scene_response['data']) > 0:
-                    fresh_scene_data = fresh_scene_response['data'][0]
+                if scene_obj.scene_type == 'smart_scene':
+                    scene_url = scene_obj.url
+                    fresh_scene_response = room_or_zone_obj._get(scene_url)
                     
-                    # Update the scene object's metadata with fresh data
-                    if scene_obj.scene_type == 'smart_scene':
+                    if fresh_scene_response.get('data') and len(fresh_scene_response['data']) > 0:
+                        fresh_scene_data = fresh_scene_response['data'][0]
+
                         if 'state' in fresh_scene_data:
                             scene_obj.metadata['state'] = fresh_scene_data['state']
                             if fresh_scene_data['state'] == 'active':
                                 return scene_name
-                    else:
-                        # For regular scenes
+
+            for scene_name, scene_obj in room_or_zone_obj.scenes.items():
+                if scene_obj.scene_type != 'smart_scene':
+                    scene_url = scene_obj.url
+                    fresh_scene_response = room_or_zone_obj._get(scene_url)
+                    
+                    if fresh_scene_response.get('data') and len(fresh_scene_response['data']) > 0:
+                        fresh_scene_data = fresh_scene_response['data'][0]
+
                         if 'status' in fresh_scene_data:
                             scene_obj.metadata['status'] = fresh_scene_data['status']
                             status_info = fresh_scene_data['status']
-                            
-                            # Check if status.active is not 'inactive'
+
                             if isinstance(status_info, dict) and status_info.get('active') != 'inactive':
                                 return scene_name
             
