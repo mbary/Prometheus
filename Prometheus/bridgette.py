@@ -427,10 +427,7 @@ class Bridgette:
             'zones': {},
             'rooms': {}
         }
-        
-        # Process zones (primary control mechanism - more granular groupings within rooms)
         for zone_name, zone_obj in self.zones.items():
-            # Refresh zone state
             zone_obj.state = zone_obj._get_state()
             
             current_state['zones'][zone_name] = {
@@ -440,10 +437,8 @@ class Bridgette:
                 },
                 'devices': self._get_devices_state(zone_obj.devices)
             }
-        
-        # Process rooms (containers for devices, less granular than zones)
+
         for room_name, room_obj in self.rooms.items():
-            # Refresh room state
             room_obj.state = room_obj._get_state()
             
             current_state['rooms'][room_name] = {
@@ -458,7 +453,7 @@ class Bridgette:
 
     def _get_active_scene_for_group(self, room_or_zone_obj) -> Union[str, None]:
         """
-        Gets the currently active scene for a room or zone by querying the grouped light.
+        Gets the currently active scene (regular or smart) for a room or zone.
         
         Args:
             room_or_zone_obj: HueRoom or HueZone object
@@ -467,22 +462,23 @@ class Bridgette:
             Union[str, None]: Name of active scene or None if no scene is active
         """
         try:
-            response = room_or_zone_obj._get(room_or_zone_obj.grouped_light_url)
-            data = response.get('data', [])
-            
-            if not data:
-                return None
-            
-            group_data = data[0]
-            
-            # Check if there's an active scene
-            if 'active_scene' in group_data and group_data['active_scene']:
-                scene_id = group_data['active_scene']['rid']
+            for scene_name, scene_data in room_or_zone_obj.scenes.items():
+                scene_id = scene_data['id']
+                scene_type = scene_data.get('type', 'scene')
+
+                scene_url = room_or_zone_obj.base_url + f"{scene_type}/{scene_id}"
+                fresh_scene_response = room_or_zone_obj._get(scene_url)
                 
-                # Find the scene name by matching the ID
-                for scene_name, scene_data in room_or_zone_obj.scenes.items():
-                    if scene_data['id'] == scene_id:
-                        return scene_name
+                if fresh_scene_response.get('data') and len(fresh_scene_response['data']) > 0:
+                    fresh_scene_data = fresh_scene_response['data'][0]
+
+                    if scene_type == 'scene':
+                        if fresh_scene_data.get('status', {}).get('active') != 'inactive':
+                            return scene_name
+
+                    elif scene_type == 'smart_scene':
+                        if fresh_scene_data.get('state') != 'inactive':
+                            return scene_name
             
             return None
         except Exception:
@@ -502,14 +498,12 @@ class Bridgette:
         
         for device_name, device_obj in devices_dict.items():
             try:
-                # Refresh device state by getting fresh data from the bridge
                 fresh_state = device_obj._initialise_state()
                 
                 device_state = {
                     'state': 'on' if fresh_state.is_on else 'off'
                 }
-                
-                # Add brightness and color temperature for non-plug devices
+
                 if not device_obj._is_plug:
                     device_state['brightness'] = fresh_state.brightness
                     device_state['colour_temperature'] = fresh_state.colour_temp
@@ -517,7 +511,6 @@ class Bridgette:
                 devices_state[device_name] = device_state
                 
             except Exception:
-                # Fallback to cached state if API call fails
                 device_state = {
                     'state': 'on' if device_obj.state == 'true' else 'off'
                 }
