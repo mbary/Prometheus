@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import Mock, patch
 from datetime import datetime
-from ..device import HueRoom
+from ..device import HueRoom, HueScene
 from ..exceptions import HueConnectionError, HueValidationError, HueResponseError
 
 # First, let's create our test fixtures that we'll reuse across tests
@@ -155,11 +155,16 @@ class TestHueRoomInitialization:
             mock_get.return_value = {"data": [{"on": {"on": True}}]}
             room = HueRoom(office_room_dict, "test_host", "test_key")
             
-            # Add test scene
+            # Add test scene as HueScene object
+            test_scene_dict = {
+                'id': 'scene_1',
+                'type': 'smart_scene',
+                'metadata': {'name': 'Natural Light'},
+                'group': {'rid': 'test_room_2'}
+            }
+            scene_obj = HueScene(dev_dict=test_scene_dict, hue_hostname="test_host", hue_key="test_key")
             room.scenes = {
-                'natural light': {
-                    'id': 'scene_1'
-                }
+                'natural light': scene_obj
             }
             
             room.set_smart_scene('natural light', brightness=80)
