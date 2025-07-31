@@ -10,7 +10,15 @@ One cannot, for example, use siri to change the brightness without having to pur
 **[EDIT]**<br>
 Well, it turns out apple has made some changes, no longer requiring a homehub device to operate the lights (this does not work with older hue bridges though). My rebelious spirit made me write this prior to these updates so yeah, it was a fun project nonetheless.<br>
 
-I still want to have a locally served ai agent that utilises this package. so lookout for prometheus_ai©
+
+## Why?
+The entire point of this project was a small rebelion against apple etc.<br> 
+As of recently I've been playing with ai agents and I love me a challenging task so I asked myself "why not have locally running agent?" <br>
+I will attempt to have a locally served voice2text model and another one that's good with tools (likely qwen3).
+Due to hardware constaints (GPU poor) I will most likely be forced to use one of the smaller versions.<br>
+To ensure it works well with the few tools it'll have, I'll try and RL the LIFE out of it and well see what happens.<br>
+RL? Another hard project? sweet<br>
+So lookout for prometheus_ai©
 
 ## Overview
 
