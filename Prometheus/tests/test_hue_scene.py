@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 from datetime import datetime
 from ..device import HueScene
 from ..exceptions import HueConnectionError, HueValidationError, HueResponseError
@@ -241,27 +241,25 @@ class TestHueSceneProperties:
 class TestHueSceneStatusMonitoring:
     """Test suite for HueScene live status monitoring functionality."""
 
-    def test_status_regular_scene_active(self, regular_scene_dict, mock_fresh_scene_responses):
+    def test_status_regular_scene_active(self, regular_scene_dict, mock_fresh_scene_responses, hue_http):
         """Test status property for active regular scene with fresh data"""
-        with patch('Prometheus.device.HueResource._get') as mock_get:
-            mock_get.return_value = mock_fresh_scene_responses["regular_active"]
-            
-            scene = HueScene(regular_scene_dict, "test_host", "test_key")
-            status = scene.status
-            
-            assert status == "on"
-            mock_get.assert_called_once_with(scene.url)
+        hue_http.mock_get.return_value = mock_fresh_scene_responses["regular_active"]
+        
+        scene = HueScene(regular_scene_dict, "test_host", "test_key")
+        status = scene.status
+        
+        assert status == "on"
+        hue_http.mock_get.assert_called_once_with(scene.url)
 
-    def test_status_regular_scene_inactive(self, regular_scene_dict, mock_fresh_scene_responses):
+    def test_status_regular_scene_inactive(self, regular_scene_dict, mock_fresh_scene_responses, hue_http):
         """Test status property for inactive regular scene"""
-        with patch('Prometheus.device.HueResource._get') as mock_get:
-            mock_get.return_value = mock_fresh_scene_responses["regular_inactive"]
-            
-            scene = HueScene(regular_scene_dict, "test_host", "test_key")
-            status = scene.status
-            
-            assert status == "off"
-            mock_get.assert_called_once_with(scene.url)
+        hue_http.mock_get.return_value = mock_fresh_scene_responses["regular_inactive"]
+        
+        scene = HueScene(regular_scene_dict, "test_host", "test_key")
+        status = scene.status
+        
+        assert status == "off"
+        hue_http.mock_get.assert_called_once_with(scene.url)
 
     def test_status_smart_scene_active(self, smart_scene_dict, mock_fresh_scene_responses):
         """Test status property for active smart scene"""
@@ -327,51 +325,48 @@ class TestHueSceneStatusMonitoring:
 class TestHueSceneControl:
     """Test suite for HueScene turn_on/turn_off functionality."""
 
-    def test_turn_on_regular_scene(self, regular_scene_dict):
+    def test_turn_on_regular_scene(self, regular_scene_dict, hue_http):
         """Test turning on a regular scene"""
-        with patch('Prometheus.device.HueResource._put') as mock_put:
-            scene = HueScene(regular_scene_dict, "test_host", "test_key")
-            scene.turn_on()
-            
-            expected_url = scene.base_url + "scene/scene_123"
-            expected_body = {"recall": {"action": "active"}}
-            
-            mock_put.assert_called_once_with(
-                url=expected_url,
-                headers=scene._HEADERS,
-                body=expected_body
-            )
+        scene = HueScene(regular_scene_dict, "test_host", "test_key")
+        scene.turn_on()
+        
+        expected_url = scene.base_url + "scene/scene_123"
+        expected_body = {"recall": {"action": "active"}}
+        
+        hue_http.mock_put.assert_called_once_with(
+            url=expected_url,
+            headers=scene._HEADERS,
+            body=expected_body
+        )
 
-    def test_turn_on_smart_scene(self, smart_scene_dict):
+    def test_turn_on_smart_scene(self, smart_scene_dict, hue_http):
         """Test turning on a smart scene"""
-        with patch('Prometheus.device.HueResource._put') as mock_put:
-            scene = HueScene(smart_scene_dict, "test_host", "test_key")
-            scene.turn_on()
-            
-            expected_url = scene.base_url + "smart_scene/smart_scene_789"
-            expected_body = {"recall": {"action": "activate"}}
-            
-            mock_put.assert_called_once_with(
-                url=expected_url,
-                headers=scene._HEADERS,
-                body=expected_body
-            )
+        scene = HueScene(smart_scene_dict, "test_host", "test_key")
+        scene.turn_on()
+        
+        expected_url = scene.base_url + "smart_scene/smart_scene_789"
+        expected_body = {"recall": {"action": "activate"}}
+        
+        hue_http.mock_put.assert_called_once_with(
+            url=expected_url,
+            headers=scene._HEADERS,
+            body=expected_body
+        )
 
-    def test_turn_off_regular_scene(self, regular_scene_dict):
+    def test_turn_off_regular_scene(self, regular_scene_dict, hue_http):
         """Test turning off a regular scene"""
-        with patch('Prometheus.device.HueResource._put') as mock_put:
-            scene = HueScene(regular_scene_dict, "test_host", "test_key")
-            scene.turn_off()
-            
-            # Should turn off the associated group's lights
-            expected_url = scene.base_url + "grouped_light/zone_456"
-            expected_body = {"on": {"on": False}}
-            
-            mock_put.assert_called_once_with(
-                url=expected_url,
-                headers=scene._HEADERS,
-                body=expected_body
-            )
+        scene = HueScene(regular_scene_dict, "test_host", "test_key")
+        scene.turn_off()
+        
+        # Should turn off the associated group's lights
+        expected_url = scene.base_url + "grouped_light/zone_456"
+        expected_body = {"on": {"on": False}}
+        
+        hue_http.mock_put.assert_called_once_with(
+            url=expected_url,
+            headers=scene._HEADERS,
+            body=expected_body
+        )
 
     def test_turn_off_smart_scene(self, smart_scene_dict):
         """Test turning off a smart scene"""
