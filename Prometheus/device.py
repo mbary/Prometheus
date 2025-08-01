@@ -654,7 +654,7 @@ class HueRoom(HueResource):
                                     'dimming':{'brightness':normalised_brightness}}}
 
                 
-                scene_url = self.base_url + f"scene/{self.scenes[scene_name]['id']}"
+                scene_url = self.base_url + f"scene/{self.scenes[scene_name].id}"
                 super()._put(url=scene_url, headers=self._HEADERS, body=body)
                 self.state = 'true'
 
@@ -691,7 +691,7 @@ class HueRoom(HueResource):
                     body = {'recall':{'action':'activate',
                                     'dimming':{'brightness':normalised_brightness}}}
                 
-                scene_url = self.base_url + f"smart_scene/{self.scenes[scene_name.lower()]['id']}"
+                scene_url = self.base_url + f"smart_scene/{self.scenes[scene_name.lower()].id}"
                 super()._put(url=scene_url, headers=self._HEADERS, body=body)
         
             except HueValidationError:
@@ -910,7 +910,7 @@ class HueZone(HueResource):
                     body = {'recall':{'action':'active',
                                     'dimming':{'brightness':normalised_brightness}}}
                 
-                scene_url = self.base_url + f"scene/{self.scenes[scene_name]['id']}"
+                scene_url = self.base_url + f"scene/{self.scenes[scene_name].id}"
                 super()._put(url=scene_url, headers=self._HEADERS, body=body)
                 self.state = 'true'
                 
@@ -947,11 +947,252 @@ class HueZone(HueResource):
                     body = {'recall':{'action':'activate',
                                     'dimming':{'brightness':normalised_brightness}}}
                 
-                scene_url = self.base_url + f"smart_scene/{self.scenes[scene_name.lower()]['id']}"
+                scene_url = self.base_url + f"smart_scene/{self.scenes[scene_name.lower()].id}"
                 super()._put(url=scene_url, headers=self._HEADERS, body=body)
         
             except HueValidationError:
                 raise
             except Exception as e:
                 raise HueConnectionError(f"Failed to set smart scene: {scene_name} in {self.name} zone: {str(e)}")
+
+
+class HueScene(HueResource):
+    """A class representing a Philips Hue Scene.
+    
+    This class provides functionality to control Philips Hue scenes, supporting both
+    regular scenes and smart scenes. It handles scene activation and provides access
+    to scene properties and status information.
+    
+    Parameters
+    ----------
+    dev_dict : Dict
+        Dictionary containing scene information from the Hue Bridge
+    hue_hostname : str
+        Hostname or IP address of the Hue Bridge
+    hue_key : str
+        Authentication key for the Hue Bridge API
+    http_client : Optional[requests.Session]
+        Custom HTTP client session, defaults to new requests.Session()
+        
+    Attributes
+    ----------
+    scene_type : str
+        Type of scene ('smart_scene' or 'scene')
+    url : str
+        API endpoint URL for this scene
+    metadata : Dict
+        Dictionary containing all scene metadata and additional information
+        
+    Methods
+    -------
+    turn_on()
+        Activates the scene
+    turn_off()
+        Deactivates the scene by turning off associated group
+    
+    Properties
+    ----------
+    type : str
+        Returns the scene type ('smart_scene' or 'scene')
+    status : str
+        Returns current scene status ('on' or 'off')
+        
+    Raises
+    ------
+    HueValidationError
+        When scene data is invalid or missing required fields
+    HueConnectionError
+        When there are connection/communication errors with Hue Bridge
+    HueResponseError
+        When API response data is invalid
+        
+    Notes
+    -----
+    Smart scenes use 'state' field for status ('active'/'inactive')
+    Regular scenes use 'status.active' field for status ('active'/'inactive')
+    """
+    
+    def __init__(self, dev_dict: Dict, hue_hostname: str, hue_key: str, 
+                 http_client: Optional[requests.Session] = None) -> None:
+        super().__init__(dev_dict, hue_hostname, hue_key, http_client)
+        
+    def _parse_dev_dict(self, dev_dict: Dict) -> None:
+        """Parse scene dictionary and set scene-specific attributes.
+        
+        Args:
+            dev_dict (Dict): Dictionary containing scene information with required keys:
+                - id: Scene identifier
+                - metadata: Dict containing scene metadata like name
+                - type: Scene type ('smart_scene' or 'scene')
+                - For smart scenes: 'state' field for status
+                - For regular scenes: 'status' field for status
+                
+        Raises:
+            HueValidationError: If scene data is invalid or missing required fields
+        """
+        try:
+            # Parse basic attributes directly since scenes don't have archetype
+            self._dev_data = dev_dict
+            self.id = dev_dict['id']
+            
+            # Set name from metadata
+            metadata = dev_dict.get('metadata', {})
+            if 'name' not in metadata:
+                raise HueValidationError("Scene missing required 'name' in metadata")
+            self.name = metadata['name'].lower()
+            
+            # Scenes don't have dev_type/archetype, so set a default
+            self.dev_type = 'scene'
+            
+            if 'type' not in dev_dict:
+                raise HueValidationError("Scene missing required 'type' field")
+                
+            self.scene_type = dev_dict['type']
+            
+            # Set API URL based on scene type
+            if self.scene_type == 'smart_scene':
+                self.url = self.base_url + f"smart_scene/{self.id}"
+            else:
+                self.url = self.base_url + f"scene/{self.id}"
+            
+            # Store all metadata and additional information
+            self.metadata = {}
+            
+            # Always include basic metadata
+            self.metadata.update(metadata)
+            
+            # Add other scene data to metadata (excluding basic fields)
+            for key, value in dev_dict.items():
+                if key not in ['id', 'metadata', 'type']:
+                    self.metadata[key] = value
+                    
+        except KeyError as e:
+            raise HueValidationError(f"Invalid scene data: {str(e)}")
+        except Exception as e:
+            raise HueValidationError(f"Failed to parse scene data: {str(e)}")
+    
+    @property
+    def type(self) -> str:
+        """Return the scene type.
+        
+        Returns:
+            str: 'smart_scene' or 'scene'
+        """
+        return self.scene_type
+    
+    @property 
+    def status(self) -> str:
+        """Return the current scene status by fetching fresh data from the bridge.
+        
+        Returns:
+            str: 'on' if scene is active, 'off' if inactive
+            
+        Notes:
+            Smart scenes use 'state' field ('active'/'inactive')
+            Regular scenes use 'status.active' field ('active'/'inactive')
+        """
+        try:
+            # Fetch fresh scene data from bridge
+            fresh_response = super()._get(self.url)
+            
+            if fresh_response.get('data') and len(fresh_response['data']) > 0:
+                fresh_data = fresh_response['data'][0]
+                
+                if self.scene_type == 'smart_scene':
+                    state = fresh_data.get('state', 'inactive')
+                    return 'on' if state == 'active' else 'off'
+                else:
+                    status_info = fresh_data.get('status', {})
+                    active_status = status_info.get('active', 'inactive')
+                    return 'on' if active_status != 'inactive' else 'off'
+            
+            # Fallback to cached data if fresh fetch fails
+            if self.scene_type == 'smart_scene':
+                state = self.metadata.get('state', 'inactive')
+                return 'on' if state == 'active' else 'off'
+            else:
+                status_info = self.metadata.get('status', {})
+                active_status = status_info.get('active', 'inactive')
+                return 'on' if active_status != 'inactive' else 'off'
+                
+        except Exception:
+            # Fallback to cached data on any error
+            if self.scene_type == 'smart_scene':
+                state = self.metadata.get('state', 'inactive')
+                return 'on' if state == 'active' else 'off'
+            else:
+                status_info = self.metadata.get('status', {})
+                active_status = status_info.get('active', 'inactive')
+                return 'on' if active_status != 'inactive' else 'off'
+    
+    def turn_on(self) -> None:
+        """Activate the scene.
+        
+        Sends appropriate API call based on scene type:
+        - Smart scenes: Uses 'activate' action
+        - Regular scenes: Uses 'active' action
+        
+        Raises:
+            HueConnectionError: If there's an error communicating with the Hue Bridge
+        """
+        try:
+            if self.scene_type == 'smart_scene':
+                body = {'recall': {'action': 'activate'}}
+            else:
+                body = {'recall': {'action': 'active'}}
+                
+            super()._put(url=self.url, headers=self._HEADERS, body=body)
+            
+            # Update metadata status
+            if self.scene_type == 'smart_scene':
+                self.metadata['state'] = 'active'
+            else:
+                if 'status' not in self.metadata:
+                    self.metadata['status'] = {}
+                self.metadata['status']['active'] = 'active'
+                
+        except Exception as e:
+            raise HueConnectionError(f"Failed to turn on scene '{self.name}': {str(e)}")
+    
+    def turn_off(self) -> None:
+        """Deactivate the scene.
+        
+        Turns off the associated group/room since scenes don't have direct "off" state.
+        
+        Raises:
+            HueValidationError: If scene has no associated group or invalid group data
+            HueConnectionError: If there's an error communicating with the Hue Bridge
+        """
+        try:
+            if 'group' not in self.metadata:
+                raise HueValidationError(f"Scene '{self.name}' has no associated group")
+                
+            group_info = self.metadata['group']
+            group_id = group_info.get('rid')
+            group_type = group_info.get('rtype')
+            
+            if not group_id or not group_type:
+                raise HueValidationError(f"Scene '{self.name}' has invalid group information")
+            
+            # Turn off the associated group
+            if group_type in ['room', 'zone']:
+                group_url = self.base_url + f"grouped_light/{group_id}"
+            else:
+                raise HueValidationError(f"Unsupported group type '{group_type}' for scene '{self.name}'")
+            
+            body = {'on': {'on': False}}
+            super()._put(url=group_url, headers=self._HEADERS, body=body)
+            
+            # Update metadata status
+            if self.scene_type == 'smart_scene':
+                self.metadata['state'] = 'inactive'
+            else:
+                if 'status' not in self.metadata:
+                    self.metadata['status'] = {}
+                self.metadata['status']['active'] = 'inactive'
+                
+        except HueValidationError:
+            raise
+        except Exception as e:
+            raise HueConnectionError(f"Failed to turn off scene '{self.name}': {str(e)}")
     

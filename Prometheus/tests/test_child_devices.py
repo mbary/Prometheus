@@ -67,27 +67,25 @@ def mock_zone_data():
 class TestDeviceMapping:
     """Tests for the devices mapping functionality"""
     
-    def test_room_devices_initialization(self, mock_room_data):
+    def test_room_devices_initialization(self, mock_room_data, hue_http):
         """Test that room devices attribute is properly initialized"""
-        with patch('Prometheus.device.HueResource._get') as mock_get:
-            mock_get.return_value = {"data": [{"on": {"on": False}}]}
-            
-            room = HueRoom(mock_room_data, "test_host", "test_key")
-            
-            assert hasattr(room, 'devices')
-            assert isinstance(room.devices, dict)
-            assert len(room.devices) == 0  # Empty until mapping occurs
+        hue_http.mock_get.return_value = {"data": [{"on": {"on": False}}]}
+        
+        room = HueRoom(mock_room_data, "test_host", "test_key")
+        
+        assert hasattr(room, 'devices')
+        assert isinstance(room.devices, dict)
+        assert len(room.devices) == 0  # Empty until mapping occurs
     
-    def test_zone_devices_initialization(self, mock_zone_data):
+    def test_zone_devices_initialization(self, mock_zone_data, hue_http):
         """Test that zone devices attribute is properly initialized"""
-        with patch('Prometheus.device.HueResource._get') as mock_get:
-            mock_get.return_value = {"data": [{"on": {"on": False}}]}
-            
-            zone = HueZone(mock_zone_data, "test_host", "test_key")
-            
-            assert hasattr(zone, 'devices')
-            assert isinstance(zone.devices, dict)
-            assert len(zone.devices) == 0  # Empty until mapping occurs
+        hue_http.mock_get.return_value = {"data": [{"on": {"on": False}}]}
+        
+        zone = HueZone(mock_zone_data, "test_host", "test_key")
+        
+        assert hasattr(zone, 'devices')
+        assert isinstance(zone.devices, dict)
+        assert len(zone.devices) == 0  # Empty until mapping occurs
 
     @patch('Prometheus.bridgette.Bridgette._get_lights')
     @patch('Prometheus.bridgette.Bridgette._get_rooms')
@@ -233,7 +231,7 @@ class TestDeviceMapping:
 class TestDeviceUsage:
     """Tests for using devices functionality"""
     
-    def test_device_control_access(self):
+    def test_device_control_access(self, hue_http):
         """Test that devices can be accessed and controlled"""
         # Create a real light object for testing
         light_data = {
@@ -245,37 +243,35 @@ class TestDeviceUsage:
             "color_temperature": {"mirek": 200}
         }
         
-        with patch('Prometheus.device.HueResource._get') as mock_get:
-            mock_get.return_value = {"data": [light_data]}
-            
-            light = HueLight(light_data, "test_host", "test_key")
-            
-            # Create room with child device
-            room_data = {
-                "id": "test_room",
-                "metadata": {"name": "Test Room", "archetype": "living_room"},
-                "children": [{"rid": "device_1"}],
-                "services": [{"rid": "grouped_light_1"}]
-            }
-            
-            with patch('Prometheus.device.HueResource._get') as mock_room_get:
-                mock_room_get.return_value = {"data": [{"on": {"on": False}}]}
-                room = HueRoom(room_data, "test_host", "test_key")
-                
-                # Manually assign device (simulating bridge mapping)
-                room.devices["test light"] = light
-                
-                # Test access and control
-                assert "test light" in room.devices
-                assert isinstance(room.devices["test light"], HueLight)
-                assert room.devices["test light"].state == "True"
-                
-                # Test that we can call methods on devices
-                with patch('Prometheus.device.HueResource._put') as mock_put:
-                    room.devices["test light"].turn_off()
-                    mock_put.assert_called_once()
+        hue_http.mock_get.return_value = {"data": [light_data]}
+        
+        light = HueLight(light_data, "test_host", "test_key")
+        
+        # Create room with child device
+        room_data = {
+            "id": "test_room",
+            "metadata": {"name": "Test Room", "archetype": "living_room"},
+            "children": [{"rid": "device_1"}],
+            "services": [{"rid": "grouped_light_1"}]
+        }
+        
+        # Use different return value for room initialization
+        hue_http.mock_get.return_value = {"data": [{"on": {"on": False}}]}
+        room = HueRoom(room_data, "test_host", "test_key")
+        
+        # Manually assign device (simulating bridge mapping)
+        room.devices["test light"] = light
+        
+        # Test access and control
+        assert "test light" in room.devices
+        assert isinstance(room.devices["test light"], HueLight)
+        assert room.devices["test light"].state == "True"
+        
+        # Test that we can call methods on devices
+        room.devices["test light"].turn_off()
+        hue_http.mock_put.assert_called_once()
 
-    def test_empty_devices_handling(self):
+    def test_empty_devices_handling(self, hue_http):
         """Test behavior when rooms/zones have no devices"""
         room_data = {
             "id": "empty_room",
@@ -284,16 +280,15 @@ class TestDeviceUsage:
             "services": [{"rid": "grouped_light_1"}]
         }
         
-        with patch('Prometheus.device.HueResource._get') as mock_get:
-            mock_get.return_value = {"data": [{"on": {"on": False}}]}
-            room = HueRoom(room_data, "test_host", "test_key")
-            
-            assert len(room.devices) == 0
-            assert isinstance(room.devices, dict)
-            
-            # Should not raise errors when accessing empty dict
-            assert "nonexistent" not in room.devices
-            assert list(room.devices.keys()) == []
+        hue_http.mock_get.return_value = {"data": [{"on": {"on": False}}]}
+        room = HueRoom(room_data, "test_host", "test_key")
+        
+        assert len(room.devices) == 0
+        assert isinstance(room.devices, dict)
+        
+        # Should not raise errors when accessing empty dict
+        assert "nonexistent" not in room.devices
+        assert list(room.devices.keys()) == []
 
 
 class TestDeviceIntegration:
@@ -311,7 +306,7 @@ class TestDeviceIntegration:
         assert "devices" in zone_docstring
         assert "Dictionary mapping light names to HueLight objects" in zone_docstring
 
-    def test_devices_backwards_compatibility(self):
+    def test_devices_backwards_compatibility(self, hue_http):
         """Test that existing functionality still works with devices added"""
         room_data = {
             "id": "test_room",
@@ -320,19 +315,17 @@ class TestDeviceIntegration:
             "services": [{"rid": "grouped_light_1"}]
         }
         
-        with patch('Prometheus.device.HueResource._get') as mock_get:
-            mock_get.return_value = {"data": [{"on": {"on": False}}]}
-            room = HueRoom(room_data, "test_host", "test_key")
-            
-            # All existing attributes should still exist and work
-            assert hasattr(room, 'children')
-            assert hasattr(room, 'scenes')
-            assert hasattr(room, 'state')
-            assert hasattr(room, 'grouped_light_id')
-            
-            # New attribute should also exist
-            assert hasattr(room, 'devices')
-            
-            # Existing methods should still work
-            with patch('Prometheus.device.HueResource._put'):
-                room.turn_off()  # Should not raise errors
+        hue_http.mock_get.return_value = {"data": [{"on": {"on": False}}]}
+        room = HueRoom(room_data, "test_host", "test_key")
+        
+        # All existing attributes should still exist and work
+        assert hasattr(room, 'children')
+        assert hasattr(room, 'scenes')
+        assert hasattr(room, 'state')
+        assert hasattr(room, 'grouped_light_id')
+        
+        # New attribute should also exist
+        assert hasattr(room, 'devices')
+        
+        # Existing methods should still work
+        room.turn_off()  # Should not raise errors

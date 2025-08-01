@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 warnings.filterwarnings('ignore')
 
 
-from .device import HueLight,HueZone,HueRoom
+from .device import HueLight,HueZone,HueRoom,HueScene
 from .exceptions import BridgeConfigError,BridgeConnectionError,BridgeResponseError, BridgeError
 
 
@@ -37,11 +37,13 @@ class Bridgette:
     lights_by_name : dict
         Helper dictionary mapping light names to light objects (handles duplicates)
     rooms : dict
-        Dictionary of all rooms configured on the bridge, with room IDs as keys
+        Dictionary of all rooms configured on the bridge, with room IDs as keys.
+        Each room contains a 'scenes' dict mapping scene names to HueScene objects
     rooms_by_name : dict
         Helper dictionary mapping room names to room objects
     zones : dict
-        Dictionary of all zones configured on the bridge, with zone IDs as keys
+        Dictionary of all zones configured on the bridge, with zone IDs as keys.
+        Each zone contains a 'scenes' dict mapping scene names to HueScene objects
     zones_by_name : dict
         Helper dictionary mapping zone names to zone objects
     _ROOM_MAP : dict
@@ -71,7 +73,7 @@ class Bridgette:
     _get_smart_scenes()
         Fetches all smart scenes configured on the bridge
     _assign_scenes()
-        Assigns scenes to their respective rooms and zones
+        Assigns scenes to their respective rooms and zones as HueScene objects
     turn_all_devices_off()
         Turns off all devices connected to the bridge
     turn_all_lights_on()
@@ -334,7 +336,7 @@ class Bridgette:
 
         This method processes all scenes retrieved from the bridge and assigns them to the appropriate
         room or zone objects based on the scene's group ID (rid). The scenes are stored in the scenes 
-        dictionary of each room/zone object, with the scene name (converted to lowercase) as the key.
+        dictionary of each room/zone object as HueScene objects, with the scene name (converted to lowercase) as the key.
 
         The method uses _ROOM_MAP and _ZONE_MAP to determine where each scene belongs. If a scene's
         group ID matches an entry in either map, the scene is assigned to the corresponding room or zone.
@@ -348,11 +350,17 @@ class Bridgette:
             if scene_id in self._ROOM_MAP.keys():
 
                 room_name = self._ROOM_MAP[scene_id]
-                self.rooms[room_name].scenes[scene_dict['metadata']['name'].lower()] = scene_dict
+                scene_obj = HueScene(dev_dict=scene_dict,
+                                   hue_hostname=self.__HUE_ADDRESS,
+                                   hue_key=self.__HUE_KEY)
+                self.rooms[room_name].scenes[scene_dict['metadata']['name'].lower()] = scene_obj
             elif scene_id in self._ZONE_MAP.keys():
 
                 zone_name = self._ZONE_MAP[scene_id]
-                self.zones[zone_name].scenes[scene_dict['metadata']['name'].lower()] = scene_dict
+                scene_obj = HueScene(dev_dict=scene_dict,
+                                   hue_hostname=self.__HUE_ADDRESS,
+                                   hue_key=self.__HUE_KEY)
+                self.zones[zone_name].scenes[scene_dict['metadata']['name'].lower()] = scene_obj
     
     def _assign_devices(self) -> None:
         """
@@ -462,23 +470,33 @@ class Bridgette:
             Union[str, None]: Name of active scene or None if no scene is active
         """
         try:
-            for scene_name, scene_data in room_or_zone_obj.scenes.items():
-                scene_id = scene_data['id']
-                scene_type = scene_data.get('type', 'scene')
+            for scene_name, scene_obj in room_or_zone_obj.scenes.items():
+                if scene_obj.scene_type == 'smart_scene':
+                    scene_url = scene_obj.url
+                    fresh_scene_response = room_or_zone_obj._get(scene_url)
+                    
+                    if fresh_scene_response.get('data') and len(fresh_scene_response['data']) > 0:
+                        fresh_scene_data = fresh_scene_response['data'][0]
 
-                scene_url = room_or_zone_obj.base_url + f"{scene_type}/{scene_id}"
-                fresh_scene_response = room_or_zone_obj._get(scene_url)
-                
-                if fresh_scene_response.get('data') and len(fresh_scene_response['data']) > 0:
-                    fresh_scene_data = fresh_scene_response['data'][0]
+                        if 'state' in fresh_scene_data:
+                            scene_obj.metadata['state'] = fresh_scene_data['state']
+                            if fresh_scene_data['state'] == 'active':
+                                return scene_name
 
-                    if scene_type == 'scene':
-                        if fresh_scene_data.get('status', {}).get('active') != 'inactive':
-                            return scene_name
+            for scene_name, scene_obj in room_or_zone_obj.scenes.items():
+                if scene_obj.scene_type != 'smart_scene':
+                    scene_url = scene_obj.url
+                    fresh_scene_response = room_or_zone_obj._get(scene_url)
+                    
+                    if fresh_scene_response.get('data') and len(fresh_scene_response['data']) > 0:
+                        fresh_scene_data = fresh_scene_response['data'][0]
 
-                    elif scene_type == 'smart_scene':
-                        if fresh_scene_data.get('state') != 'inactive':
-                            return scene_name
+                        if 'status' in fresh_scene_data:
+                            scene_obj.metadata['status'] = fresh_scene_data['status']
+                            status_info = fresh_scene_data['status']
+
+                            if isinstance(status_info, dict) and status_info.get('active') != 'inactive':
+                                return scene_name
             
             return None
         except Exception:
