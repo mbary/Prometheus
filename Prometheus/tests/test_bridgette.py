@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 from ..bridgette import Bridgette
+from ..device import HueZone, HueScene
 from ..exceptions import BridgeConfigError, BridgeConnectionError
 
 
@@ -369,3 +370,294 @@ class TestBridgetteChildDeviceMapping:
             assert "matching light" in mock_room.devices
             assert "orphan light" not in mock_room.devices
             assert mock_room.devices["matching light"] == mock_light_1
+
+
+class TestBridgetteHueZoneIntegration:
+    """Tests for Bridgette's HueZone integration and management"""
+
+    @pytest.fixture
+    def mock_zone_api_data(self):
+        """Mock API data for zone discovery"""
+        return {
+            "data": [
+                {
+                    "id": "zone_1",
+                    "metadata": {
+                        "name": "Living Area",
+                        "archetype": "living_room"
+                    },
+                    "services": [{"rid": "grouped_light_zone_1"}],
+                    "children": [
+                        {"rid": "light_1", "rtype": "light"},
+                        {"rid": "light_2", "rtype": "light"}
+                    ],
+                    "on": {"on": False}
+                },
+                {
+                    "id": "zone_2", 
+                    "metadata": {
+                        "name": "Office",
+                        "archetype": "office"
+                    },
+                    "services": [{"rid": "grouped_light_zone_2"}],
+                    "children": [
+                        {"rid": "light_3", "rtype": "light"}
+                    ],
+                    "on": {"on": True}
+                }
+            ]
+        }
+
+    @pytest.fixture  
+    def mock_zone_scene_data(self):
+        """Mock scene data for zones"""
+        return [
+            {
+                "id": "scene_1",
+                "type": "scene",
+                "metadata": {"name": "Bright"},
+                "group": {"rid": "zone_1", "rtype": "zone"},
+                "status": {"active": "inactive"}
+            },
+            {
+                "id": "scene_2",
+                "type": "smart_scene",
+                "metadata": {"name": "Natural Light"},
+                "group": {"rid": "zone_2", "rtype": "zone"},
+                "state": "active"
+            }
+        ]
+
+    def test_zone_discovery_and_creation(self, mock_zone_api_data):
+        """Test that zones are properly discovered and HueZone objects are created"""
+        mock_config = {'hostname': 'test_host', 'key': 'test_key'}
+        
+        with patch('builtins.open'), \
+             patch('yaml.load', return_value=mock_config), \
+             patch('pathlib.Path.exists', return_value=True), \
+             patch('Prometheus.bridgette.Bridgette._get_lights', return_value={}), \
+             patch('Prometheus.bridgette.Bridgette._get_rooms', return_value={}), \
+             patch('Prometheus.bridgette.Bridgette._get_scenes', return_value=[]), \
+             patch('requests.Session.get') as mock_get:
+            
+            # Mock the zone API response
+            mock_response = Mock()
+            mock_response.json.return_value = mock_zone_api_data
+            mock_get.return_value = mock_response
+            
+            bridge = Bridgette()
+            
+            # Verify zones were created
+            assert len(bridge.zones) == 2
+            assert "living area" in bridge.zones
+            assert "office" in bridge.zones
+            
+            # Verify HueZone objects were created properly
+            living_area = bridge.zones["living area"]
+            office = bridge.zones["office"]
+            
+            assert isinstance(living_area, HueZone)
+            assert isinstance(office, HueZone)
+            
+            # Verify zone properties
+            assert living_area.id == "zone_1"
+            assert living_area.name == "living area"  # Normalized
+            assert living_area.children == ["light_1", "light_2"]
+            
+            assert office.id == "zone_2"
+            assert office.name == "office"
+            assert office.children == ["light_3"]
+
+    def test_zone_scene_assignment(self, mock_zone_api_data, mock_zone_scene_data):
+        """Test that scenes are properly assigned to zones"""
+        mock_config = {'hostname': 'test_host', 'key': 'test_key'}
+        
+        with patch('builtins.open'), \
+             patch('yaml.load', return_value=mock_config), \
+             patch('pathlib.Path.exists', return_value=True), \
+             patch('Prometheus.bridgette.Bridgette._get_lights', return_value={}), \
+             patch('Prometheus.bridgette.Bridgette._get_rooms', return_value={}), \
+             patch('requests.Session.get') as mock_get:
+            
+            # Mock the zone API response
+            mock_zone_response = Mock()
+            mock_zone_response.json.return_value = mock_zone_api_data
+            
+            # Mock scene API responses
+            mock_regular_scene_response = Mock()
+            mock_regular_scene_response.json.return_value = {"data": [mock_zone_scene_data[0]]}
+            
+            mock_smart_scene_response = Mock()
+            mock_smart_scene_response.json.return_value = {"data": [mock_zone_scene_data[1]]}
+            
+            # Set up the API call sequence
+            mock_get.side_effect = [
+                mock_zone_response,  # _get_zones call
+                mock_regular_scene_response,  # scene API call
+                mock_smart_scene_response   # smart_scene API call
+            ]
+            
+            bridge = Bridgette()
+            
+            # Verify scenes were assigned to correct zones
+            living_area = bridge.zones["living area"]
+            office = bridge.zones["office"]
+            
+            assert len(living_area.scenes) == 1
+            assert "bright" in living_area.scenes
+            assert isinstance(living_area.scenes["bright"], HueScene)
+            assert living_area.scenes["bright"].type == "scene"
+            
+            assert len(office.scenes) == 1
+            assert "natural light" in office.scenes
+            assert isinstance(office.scenes["natural light"], HueScene) 
+            assert office.scenes["natural light"].type == "smart_scene"
+
+    def test_zone_state_monitoring_integration(self, mock_zone_api_data):
+        """Test integration between zones and get_current_state method"""
+        mock_config = {'hostname': 'test_host', 'key': 'test_key'}
+        
+        with patch('builtins.open'), \
+             patch('yaml.load', return_value=mock_config), \
+             patch('pathlib.Path.exists', return_value=True), \
+             patch('Prometheus.bridgette.Bridgette._get_lights', return_value={}), \
+             patch('Prometheus.bridgette.Bridgette._get_rooms', return_value={}), \
+             patch('Prometheus.bridgette.Bridgette._get_scenes', return_value=[]), \
+             patch('requests.Session.get') as mock_get:
+            
+            # Mock the zone API response
+            mock_response = Mock()
+            mock_response.json.return_value = mock_zone_api_data
+            mock_get.return_value = mock_response
+            
+            bridge = Bridgette()
+            
+            # Mock the _get_active_scene_for_group method for testing
+            with patch.object(bridge, '_get_active_scene_for_group') as mock_get_active_scene:
+                mock_get_active_scene.return_value = None  # No active scene
+                
+                current_state = bridge.get_current_state()
+                
+                # Verify zones are included in current state
+                assert "zones" in current_state
+                assert len(current_state["zones"]) == 2
+                
+                # Verify zone state structure
+                living_area_state = current_state["zones"]["living area"]
+                assert "zone_state" in living_area_state
+                assert "lights" in living_area_state
+                assert living_area_state["zone_state"]["scene"] is None
+
+    def test_zone_special_office_behavior(self):
+        """Test that office zones get special turn_on behavior"""
+        office_zone_data = {
+            "data": [{
+                "id": "office_zone",
+                "metadata": {
+                    "name": "Office",
+                    "archetype": "office"
+                },
+                "services": [{"rid": "grouped_light_office"}],
+                "children": [{"rid": "light_office", "rtype": "light"}],
+                "on": {"on": False}
+            }]
+        }
+        
+        mock_config = {'hostname': 'test_host', 'key': 'test_key'}
+        
+        with patch('builtins.open'), \
+             patch('yaml.load', return_value=mock_config), \
+             patch('pathlib.Path.exists', return_value=True), \
+             patch('Prometheus.bridgette.Bridgette._get_lights', return_value={}), \
+             patch('Prometheus.bridgette.Bridgette._get_rooms', return_value={}), \
+             patch('Prometheus.bridgette.Bridgette._get_scenes', return_value=[]), \
+             patch('requests.Session.get') as mock_get:
+            
+            mock_response = Mock()
+            mock_response.json.return_value = office_zone_data
+            mock_get.return_value = mock_response
+            
+            bridge = Bridgette()
+            
+            # Verify office zone exists
+            assert "office" in bridge.zones
+            office = bridge.zones["office"]
+            
+            # Add a natural light scene to test special behavior
+            natural_light_scene = HueScene({
+                "id": "natural_light_scene",
+                "type": "smart_scene",
+                "metadata": {"name": "Natural Light"}
+            }, "test_host", "test_key")
+            
+            office.scenes["natural light"] = natural_light_scene
+            
+            # Test that office zone would attempt to use natural light scene
+            with patch.object(office, 'set_smart_scene') as mock_set_smart_scene:
+                office.turn_on()
+                mock_set_smart_scene.assert_called_once_with(scene_name='natural light')
+
+    def test_zone_error_handling_during_discovery(self):
+        """Test error handling during zone discovery"""
+        mock_config = {'hostname': 'test_host', 'key': 'test_key'}
+        
+        with patch('builtins.open'), \
+             patch('yaml.load', return_value=mock_config), \
+             patch('pathlib.Path.exists', return_value=True), \
+             patch('Prometheus.bridgette.Bridgette._get_lights', return_value={}), \
+             patch('Prometheus.bridgette.Bridgette._get_rooms', return_value={}), \
+             patch('Prometheus.bridgette.Bridgette._get_scenes', return_value=[]), \
+             patch('requests.Session.get') as mock_get:
+            
+            # Mock a network error during zone discovery
+            mock_get.side_effect = Exception("Network timeout")
+            
+            # Should handle the error gracefully and create empty zones dict
+            bridge = Bridgette()
+            assert isinstance(bridge.zones, dict)
+            assert len(bridge.zones) == 0
+
+    def test_zone_device_assignment_integration(self):
+        """Test integration between zone creation and device assignment"""
+        zone_data = {
+            "data": [{
+                "id": "test_zone",
+                "metadata": {"name": "Test Zone", "archetype": "zone"},
+                "services": [{"rid": "grouped_light_test"}],
+                "children": [{"rid": "light_1", "rtype": "light"}],
+                "on": {"on": False}
+            }]
+        }
+        
+        # Mock light that should be assigned to the zone
+        mock_light = Mock()
+        mock_light.name = "test light"
+        mock_light.id = "light_1"
+        mock_lights = {"test light": mock_light}
+        
+        mock_config = {'hostname': 'test_host', 'key': 'test_key'}
+        
+        with patch('builtins.open'), \
+             patch('yaml.load', return_value=mock_config), \
+             patch('pathlib.Path.exists', return_value=True), \
+             patch('Prometheus.bridgette.Bridgette._get_lights', return_value=mock_lights), \
+             patch('Prometheus.bridgette.Bridgette._get_rooms', return_value={}), \
+             patch('Prometheus.bridgette.Bridgette._get_scenes', return_value=[]), \
+             patch('requests.Session.get') as mock_get:
+            
+            mock_response = Mock()
+            mock_response.json.return_value = zone_data
+            mock_get.return_value = mock_response
+            
+            bridge = Bridgette()
+            
+            # Verify zone was created and device was assigned
+            assert "test zone" in bridge.zones
+            test_zone = bridge.zones["test zone"]
+            
+            # Note: The actual device assignment happens in _assign_devices
+            # This test verifies the zone structure is ready for assignment
+            assert hasattr(test_zone, 'devices')
+            assert isinstance(test_zone.devices, dict)
+            assert hasattr(test_zone, 'children')
+            assert test_zone.children == ["light_1"]
