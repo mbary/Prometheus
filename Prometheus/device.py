@@ -954,7 +954,29 @@ class HueZone(HueResource):
                 raise
             except Exception as e:
                 raise HueConnectionError(f"Failed to set smart scene: {scene_name} in {self.name} zone: {str(e)}")
+    
+    def change_temp(self, t_level: int) -> None:
+        """Changes the color temperature of all the lights in the zone.
 
+        Sets color temperature within device's allowed range. The value is automatically capped
+        between MIN_COLOR_TEMP and MAX_COLOR_TEMP if outside these bounds.
+
+        Args:
+            t_level (int): Target color temperature in mirek (higher values = warmer colors,
+                lower values = cooler colors)
+
+        Returns:
+            None
+
+        Note:
+            Mirek is reciprocal megakelvin (MK^-1). Converting from Kelvin to mirek:
+            mirek = 1,000,000 / color_temperature_in_kelvin
+        """
+        for device in self.devices.values():
+            if isinstance(device, HueLight):
+                device.change_temp(t_level)
+            else:
+                pass
 
 class HueScene(HueResource):
     """A class representing a Philips Hue Scene.
