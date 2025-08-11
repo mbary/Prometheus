@@ -266,66 +266,7 @@ Bridgette         - Main controller and bridge interface
 └─────────────────┘    └──────────────────┘    └─────────────────────┘
 ```
 
-## Advanced Features
 
-### Custom HTTP Client
-
-```python
-import requests
-from Prometheus.device import HueLight
-
-# Custom session with specific settings
-session = requests.Session()
-session.timeout = 30
-
-# Pass to device constructor (internal use)
-light = HueLight(device_data, "192.168.0.122", "api_key", http_client=session)
-```
-
-### Error Handling
-
-Prometheus provides a comprehensive exception hierarchy:
-
-```python
-from Prometheus import Bridgette
-from Prometheus.exceptions import (
-    BridgeConfigError, BridgeConnectionError, 
-    BridgeResponseError, HueConnectionError
-)
-
-try:
-    bridge = Bridgette()
-    bridge.lights['nonexistent'].turn_on()
-    
-except BridgeConfigError as e:
-    print(f"Configuration issue: {e}")
-    
-except BridgeConnectionError as e:
-    print(f"Network/connection problem: {e}")
-    
-except BridgeResponseError as e:
-    print(f"Invalid bridge response: {e}")
-    
-except HueConnectionError as e:
-    print(f"Device communication error: {e}")
-    
-except KeyError:
-    print("Device not found")
-```
-
-### Device State Monitoring
-
-```python
-# Monitor device states
-for name, light in bridge.lights.items():
-    current_state = light._current_state
-    print(f"{name}:")
-    print(f"  On: {current_state.is_on}")
-    print(f"  Brightness: {current_state.brightness}")
-    print(f"  Color Temp: {current_state.colour_temp}")
-    print(f"  Reachable: {current_state.reachable}")
-    print(f"  Last Updated: {current_state.last_updated}")
-```
 
 ## Development
 
@@ -344,96 +285,8 @@ Prometheus/
 └── requirements.txt     # Dependencies
 ```
 
-### Adding New Features
 
-1. **Device Classes**: Extend `HueResource` for new device types
-2. **Bridge Methods**: Add new methods to `Bridgette` for bridge-level operations
-3. **Error Handling**: Use appropriate exceptions from `exceptions.py`
-4. **Testing**: Add unit tests for new functionality
 
-## API Reference
-
-### Bridgette Class
-
-| Method | Description |
-|--------|-------------|
-| `__init__(cfg_path)` | Initialize bridge connection |
-| `turn_all_devices_off()` | Turn off all connected devices |
-| `turn_all_lights_on()` | Turn on all lights (excluding plugs) |
-| `get_current_state()` | Get current state of all rooms/zones with active scenes |
-
-**Properties:**
-- `lights`: Dictionary of HueLight objects
-- `rooms`: Dictionary of HueRoom objects  
-- `zones`: Dictionary of HueZone objects
-
-### HueLight Class
-
-| Method | Parameters | Description |
-|--------|-----------|-------------|
-| `turn_on()` | None | Turn the light on |
-| `turn_off()` | None | Turn the light off |
-| `change_brightness(level)` | `level: int` (0-100) | Set brightness level |
-| `change_temp(temp)` | `temp: int` (153-500) | Set color temperature |
-
-### HueRoom/HueZone Classes
-
-| Method | Parameters | Description |
-|--------|-----------|-------------|
-| `turn_on()` | None | Turn on room/zone |
-| `turn_off()` | None | Turn off room/zone |
-| `change_brightness(level)` | `level: int` (0-100) | Set brightness for all lights |
-| `set_scene(name, brightness)` | `name: str`, `brightness: int` | Activate scene |
-| `set_smart_scene(name, brightness)` | `name: str`, `brightness: int` | Activate smart scene |
-
-**Properties:**
-- `scenes`: Dictionary of HueScene objects
-- `devices`: Dictionary of HueLight objects in this room/zone
-
-### HueScene Class
-
-| Method | Parameters | Description |
-|--------|-----------|-------------|
-| `turn_on()` | None | Activate the scene |
-| `turn_off()` | None | Deactivate the scene |
-
-**Properties:**
-- `id`: Scene ID from the bridge
-- `type`: Scene type ('scene' or 'smart_scene')
-- `status`: Current scene status ('on' or 'off') - fetches fresh data from bridge
-- `metadata`: Dictionary containing scene information and bridge data
-
-**Note:** Smart scenes take priority over regular scenes in status detection. When `get_current_state()` is called and both a smart scene and regular scene are active, the smart scene will be reported as the active scene.
-
-## Troubleshooting
-
-### Common Issues
-
-**WSL DNS Resolution Problems**
-```
-Error: Failed to resolve '<hue_hostname>'
-Solution: Use HUE_IP environment variable instead of HUE_HOSTNAME
-```
-
-**Bridge Not Found**
-```
-Error: Bridge configuration not found
-Solution: Set HUE_IP and HUE_KEY environment variables or create cfg.yaml
-```
-
-**Device Not Responding**
-```
-Error: Failed to connect to Hue Bridge
-Solution: Check bridge IP address and ensure it's on the same network
-```
-
-## Dependencies
-
-- **Python**: >=3.12
-- **requests**: HTTP client for API communication
-- **pyyaml**: YAML configuration file parsing
-- **python-dotenv**: Environment variable loading
-- **pytest**: Testing framework
 
 ## Technical Details
 
