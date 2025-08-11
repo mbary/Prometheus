@@ -10,6 +10,35 @@ One cannot, for example, use siri to change the brightness without having to pur
 **[EDIT]**<br>
 Well, it turns out apple has made some changes, no longer requiring a homehub device to operate the lights (this does not work with older hue bridges though). My rebelious spirit made me write this prior to these updates so yeah, it was a fun project nonetheless.<br>
 
+## Table of Contents
+- [Why?](#why)
+- [Overview](#overview)
+  - [Key Features](#key-features)
+- [Installation](#installation)
+- [Configuration](#configuration)
+  - [Environment Variables (Recommended)](#environment-variables-recommended)
+  - [YAML Configuration File](#yaml-configuration-file)
+  - [Configuration Priority](#configuration-priority)
+- [Quick Start](#quick-start)
+- [Detailed Usage](#detailed-usage)
+  - [Bridge Management](#bridge-management)
+  - [Individual Light Control](#individual-light-control)
+  - [Room Control](#room-control)
+  - [Zone Control](#zone-control)
+  - [Scene Management](#scene-management)
+- [Architecture](#architecture)
+  - [Class Hierarchy](#class-hierarchy)
+  - [Device Discovery Flow](#device-discovery-flow)
+  - [Configuration Loading](#configuration-loading)
+- [Development](#development)
+  - [Project Structure](#project-structure)
+- [Technical Details](#technical-details)
+  - [Device State Management](#device-state-management)
+  - [Scene Assignment Logic](#scene-assignment-logic)
+  - [Scene Priority Logic](#scene-priority-logic)
+  - [Smart Room Behavior](#smart-room-behavior)
+- [TODO's](#todos-1)
+- [License](#license)
 
 ## Why?
 The entire point of this project was a small rebelion against apple etc.<br> 
